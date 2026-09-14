@@ -20,6 +20,7 @@ const notificationSchema = new mongoose.Schema(
             type: String,
             enum: [
                 "job_created",
+                "job_available",
                 "job_accepted",
                 "worker_on_the_way",
                 "otp_verified",

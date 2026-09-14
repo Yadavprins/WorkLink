@@ -2,7 +2,9 @@ const bcrypt = require("bcryptjs");
 
 const User = require("../models/User");
 const Worker = require("../models/Worker");
+const Admin = require("../models/Admin");
 const generateToken = require("../utils/generateToken");
+const debugLog = require("../utils/debugLog");
 
 // =====================================================
 // HELPERS
@@ -306,7 +308,7 @@ const registerWorker = async (req, res) => {
                 location: worker.location,
                 isAvailable:
                     worker.isAvailable,
-                role: worker.role,
+                role: "worker",
             },
         });
     } catch (error) {
@@ -358,6 +360,14 @@ const loginCustomer = async (req, res) => {
                 success: false,
                 message:
                     "Invalid email or password",
+            });
+        }
+
+        if (user.isBlocked) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    "This customer account has been blocked",
             });
         }
 
@@ -448,6 +458,14 @@ const loginWorker = async (req, res) => {
             });
         }
 
+        if (worker.isBlocked) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    "This worker account has been blocked",
+            });
+        }
+
         const passwordMatch =
             await bcrypt.compare(
                 password,
@@ -486,7 +504,7 @@ const loginWorker = async (req, res) => {
                     worker.location,
                 isAvailable:
                     worker.isAvailable,
-                role: worker.role,
+                role: "worker",
             },
         });
     } catch (error) {
@@ -504,12 +522,104 @@ const loginWorker = async (req, res) => {
 };
 
 // =====================================================
-// EXPORTS
+// ADMIN LOGIN
 // =====================================================
+
+const loginAdmin = async (req, res) => {
+    try {
+        const { email, password } =
+            req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Email and password are required",
+            });
+        }
+
+        const normalizedEmail =
+            normalizeEmail(email);
+
+        const admin =
+            await Admin.findOne({
+                email: {
+                    $regex: `^${escapeRegex(
+                        normalizedEmail
+                    )}$`,
+                    $options: "i",
+                },
+            });
+
+        // #region agent log
+        debugLog(
+            "authController.js:loginAdmin",
+            "Admin login lookup",
+            {
+                found: Boolean(admin),
+                emailLength: normalizedEmail.length,
+            },
+            "A"
+        );
+        // #endregion
+
+        if (!admin) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Invalid email or password",
+            });
+        }
+
+        const passwordMatch =
+            await bcrypt.compare(
+                password,
+                admin.password
+            );
+
+        if (!passwordMatch) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Invalid email or password",
+            });
+        }
+
+        const token =
+            generateToken(
+                admin._id,
+                "admin"
+            );
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            token,
+            user: {
+                id: admin._id,
+                name: admin.name,
+                email: admin.email,
+                role: "admin",
+            },
+        });
+    } catch (error) {
+        console.error(
+            "Admin login error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while logging in",
+        });
+    }
+};
 
 module.exports = {
     registerCustomer,
     registerWorker,
     loginCustomer,
     loginWorker,
+    loginAdmin,
 };

@@ -46,7 +46,7 @@ function LandingPage() {
           <div className="hero-actions">
             <button
               className="primary-button"
-              onClick={() => navigate("/role")}
+                onClick={() => navigate("/role-selection")}
             >
               Get Started
               <ArrowRight size={19} />

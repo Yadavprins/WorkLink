@@ -468,7 +468,7 @@ const MyJobs = () => {
                     tabIndex={0}
                     onClick={() =>
                       navigate(
-                        `/jobs/${job.id}`
+                        `/customer/jobs/${job.id}`
                       )
                     }
                     onKeyDown={(
@@ -483,7 +483,7 @@ const MyJobs = () => {
                         event.preventDefault();
 
                         navigate(
-                          `/jobs/${job.id}`
+                          `/customer/jobs/${job.id}`
                         );
                       }
                     }}

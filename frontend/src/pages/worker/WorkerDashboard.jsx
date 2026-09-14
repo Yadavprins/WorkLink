@@ -21,6 +21,7 @@ import { Link } from "react-router-dom";
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 import { useAuth } from "../../context/AuthContext";
+import workerJobService from "../../services/workerJobService";
 
 const API_BASE_URL =
     import.meta.env.VITE_API_URL ||
@@ -58,6 +59,15 @@ const WorkerDashboard = () => {
         useState(false);
 
     const [locationLoading, setLocationLoading] =
+        useState(false);
+
+    const [jobPrompt, setJobPrompt] =
+        useState(null);
+
+    const [dismissedJobId, setDismissedJobId] =
+        useState(null);
+
+    const [acceptingJob, setAcceptingJob] =
         useState(false);
 
     // =====================================================
@@ -180,7 +190,9 @@ const WorkerDashboard = () => {
                 ) {
                     setDashboard(
                         dashboardResult.value
-                            ?.dashboard || null
+                            ?.dashboard ||
+                            dashboardResult.value ||
+                            null
                     );
                 }
 
@@ -271,6 +283,7 @@ const WorkerDashboard = () => {
 
                 setDashboard(
                     dashboardResponse?.dashboard ||
+                        dashboardResponse ||
                         null
                 );
 
@@ -307,10 +320,17 @@ const WorkerDashboard = () => {
     useEffect(() => {
         if (!token) {
             setLoading(false);
-            return;
+
+            return undefined;
         }
 
         loadData();
+
+        const refreshTimer = setInterval(() => {
+            loadData(true);
+        }, 15000);
+
+        return () => clearInterval(refreshTimer);
     }, [token, loadData]);
 
     // =====================================================
@@ -323,7 +343,9 @@ const WorkerDashboard = () => {
         {};
 
     const statistics =
-        dashboard?.statistics || {};
+        dashboard?.statistics ||
+        dashboard?.stats ||
+        {};
 
     const nearbyJobs =
         Array.isArray(
@@ -363,6 +385,43 @@ const WorkerDashboard = () => {
         Boolean(
             worker?.isAvailable
         );
+
+    useEffect(() => {
+        if (
+            nearbyJobs.length > 0 &&
+            !jobPrompt &&
+            String(
+                nearbyJobs[0]?._id ||
+                    nearbyJobs[0]?.id
+            ) !== String(dismissedJobId)
+        ) {
+            setJobPrompt(nearbyJobs[0]);
+        }
+    }, [nearbyJobs, jobPrompt, dismissedJobId]);
+
+    const acceptPromptJob = async () => {
+        const jobId =
+            jobPrompt?._id ||
+            jobPrompt?.id;
+
+        if (!jobId || acceptingJob) {
+            return;
+        }
+
+        try {
+            setAcceptingJob(true);
+            await workerJobService.acceptJob(jobId);
+            setJobPrompt(null);
+            await loadData(true);
+        } catch (err) {
+            setError(
+                err?.message ||
+                    "Unable to accept this job."
+            );
+        } finally {
+            setAcceptingJob(false);
+        }
+    };
 
     const workerName =
         worker?.name ||
@@ -897,6 +956,68 @@ const WorkerDashboard = () => {
                 />
 
                 <main className="dashboard-content">
+
+                    {jobPrompt && (
+                        <div
+                            role="dialog"
+                            aria-live="polite"
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "16px",
+                                padding: "16px",
+                                marginBottom: "18px",
+                                borderRadius: "10px",
+                                background: "#eff6ff",
+                                border: "1px solid #bfdbfe",
+                            }}
+                        >
+                            <div>
+                                <strong>
+                                    New job available nearby
+                                </strong>
+                                <p style={{ margin: "4px 0 0" }}>
+                                    {jobPrompt.title} is within {jobPrompt.distance ?? "5"} km. Accept it?
+                                </p>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "8px" }}>
+                                <Link
+                                    className="secondary-btn"
+                                    to={`/worker/jobs/${jobPrompt._id || jobPrompt.id}`}
+                                    onClick={() => {
+                                        setDismissedJobId(
+                                            jobPrompt._id || jobPrompt.id
+                                        );
+                                        setJobPrompt(null);
+                                    }}
+                                >
+                                    View Details
+                                </Link>
+                                <button
+                                    type="button"
+                                    className="primary-btn"
+                                    onClick={acceptPromptJob}
+                                    disabled={acceptingJob}
+                                >
+                                    {acceptingJob ? "Accepting..." : "Accept Job"}
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label="Dismiss job notification"
+                                    onClick={() => {
+                                        setDismissedJobId(
+                                            jobPrompt._id || jobPrompt.id
+                                        );
+                                        setJobPrompt(null);
+                                    }}
+                                >
+                                    Later
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* HEADER */}
 

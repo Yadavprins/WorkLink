@@ -81,12 +81,6 @@ function LoginPage() {
       return;
     }
 
-    // Backend currently supports customer and worker authentication.
-    if (role === "admin") {
-      setError("Admin login is not available in the current backend.");
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -109,11 +103,6 @@ function LoginPage() {
 
   const handleDemoLogin = async () => {
     setError("");
-
-    if (role === "admin") {
-      setError("Admin login is not available in the current backend.");
-      return;
-    }
 
     setError(
       "Demo login is disabled because authentication is now connected to the backend. Please use a registered account."

@@ -6,6 +6,7 @@ import {
   MapPin,
   Phone,
   Search,
+  Trash2,
   User,
 } from "lucide-react";
 
@@ -47,6 +48,9 @@ const JobDetails = () => {
   const [cancelling, setCancelling] =
     useState(false);
 
+  const [deleting, setDeleting] =
+    useState(false);
+
   // ===================================================
   // LOAD REAL JOB
   // ===================================================
@@ -80,6 +84,21 @@ const JobDetails = () => {
   useEffect(() => {
     loadJob();
   }, [id]);
+
+  useEffect(() => {
+    if (
+      !job ||
+      !["on_the_way", "arrived"].includes(
+        String(job.status || "").toLowerCase()
+      )
+    ) {
+      return undefined;
+    }
+
+    const refreshTimer = setInterval(loadJob, 10000);
+
+    return () => clearInterval(refreshTimer);
+  }, [job?.status, id]);
 
   // ===================================================
   // CANCEL
@@ -141,6 +160,30 @@ const JobDetails = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!job || deleting) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete this job?")) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setError("");
+      await jobService.deleteJob(job.id);
+      navigate("/customer/my-jobs", { replace: true });
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to delete job."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // ===================================================
   // LOCATION
   // ===================================================
@@ -158,6 +201,10 @@ const JobDetails = () => {
       typeof job.location ===
         "object"
     ) {
+      if (job.address) {
+        return job.address;
+      }
+
       return (
         job.location.address ||
         job.location.area ||
@@ -314,6 +361,22 @@ const JobDetails = () => {
             </div>
           )}
 
+          {job?.status === "arrived" && (
+            <div className="dashboard-success">
+              Worker has arrived. Share the start OTP with the worker.
+            </div>
+          )}
+
+          {job?.otp && ["on_the_way", "arrived"].includes(job.status) && (
+            <div className="details-card">
+              <strong>Service Start OTP</strong>
+              <p>Share this one-time code only when the worker arrives.</p>
+              <strong style={{ fontSize: "28px", letterSpacing: "4px" }}>
+                {job.otp}
+              </strong>
+            </div>
+          )}
+
           <section className="job-details-header">
             <div>
               <span className="page-eyebrow">
@@ -377,6 +440,19 @@ const JobDetails = () => {
                       </strong>
                     </div>
                   </div>
+
+                  {job?.liveTrackingActive &&
+                    job?.workerLiveLocation && (
+                    <div className="detail-item">
+                      <MapPin size={19} />
+                      <div>
+                        <span>Worker Live Location</span>
+                        <strong>
+                          {Number(job.workerLiveLocation.latitude).toFixed(5)}, {Number(job.workerLiveLocation.longitude).toFixed(5)}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="detail-item">
                     <IndianRupee
@@ -542,20 +618,26 @@ const JobDetails = () => {
               {/* ACTIONS */}
 
               {canCancel && (
-                <button
-                  type="button"
-                  className="secondary-btn full-width"
-                  onClick={
-                    handleCancel
-                  }
-                  disabled={
-                    cancelling
-                  }
-                >
-                  {cancelling
-                    ? "Cancelling..."
-                    : "Cancel Job"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="secondary-btn full-width"
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? "Cancelling..." : "Cancel Job"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-btn full-width"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    <Trash2 size={17} />
+                    {deleting ? "Deleting..." : "Delete Job"}
+                  </button>
+                </>
               )}
 
               <Link

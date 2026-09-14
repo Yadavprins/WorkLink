@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   IndianRupee,
   MapPin,
+  Navigation,
   Phone,
   UserRound,
 } from "lucide-react";
@@ -25,69 +26,41 @@ import StatusBadge from "../../components/jobs/StatusBadge";
 import workerJobService from "../../services/workerJobService";
 
 const WorkerJobDetails = () => {
-  const { id } =
-    useParams();
+  const { id } = useParams();
+  const navigate = useNavigate();
 
-  const navigate =
-    useNavigate();
-
-  const [sidebarOpen, setSidebarOpen] =
-    useState(false);
-
-  const [job, setJob] =
-    useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [accepting, setAccepting] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [message, setMessage] =
-    useState("");
-
-  // ===================================================
-  // LOAD
-  // ===================================================
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [accepting, setAccepting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [otp, setOtp] = useState("");
 
   useEffect(() => {
     let mounted = true;
 
-    const loadJob =
-      async () => {
-        try {
-          setLoading(true);
-          setError("");
+    const loadJob = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await workerJobService.getJobById(id);
 
-          const data =
-            await workerJobService.getJobById(
-              id
-            );
-
-          if (mounted) {
-            setJob(data);
-          }
-        } catch (err) {
-          console.error(
-            "Worker job details error:",
-            err
-          );
-
-          if (mounted) {
-            setError(
-              err?.message ||
-                "Unable to load job details."
-            );
-          }
-        } finally {
-          if (mounted) {
-            setLoading(false);
-          }
+        if (mounted) {
+          setJob(data);
         }
-      };
+      } catch (err) {
+        if (mounted) {
+          setError(err?.message || "Unable to load job details.");
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
 
     loadJob();
 
@@ -95,6 +68,38 @@ const WorkerJobDetails = () => {
       mounted = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (
+      !["on_the_way", "arrived"].includes(job?.status) ||
+      !navigator.geolocation
+    ) {
+      return undefined;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        try {
+          await workerJobService.updateLocation(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+        } catch (error) {
+          console.error("Live location update error:", error);
+        }
+      },
+      (error) => {
+        console.error("Live location error:", error);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 15000,
+      }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [job?.status]);
 
   // ===================================================
   // ACCEPT
@@ -171,6 +176,75 @@ const WorkerJobDetails = () => {
       .filter(Boolean)
       .join(", ") ||
       "Location not specified";
+  };
+
+  const getMapUrl = () => {
+    const latitude = job?.location?.latitude;
+    const longitude = job?.location?.longitude;
+    const destination = Number.isFinite(Number(latitude)) &&
+      Number.isFinite(Number(longitude))
+      ? `${latitude},${longitude}`
+      : getLocation();
+
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+  };
+
+  const handleStartTravel = async () => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setJob(await workerJobService.startTravel(job.id));
+      setMessage("Live location sharing started.");
+    } catch (err) {
+      setError(err?.message || "Unable to start travel.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectJob = async () => {
+    try {
+      setRejecting(true);
+      setError("");
+      await workerJobService.rejectJob(job.id);
+      navigate("/worker/available-jobs", { replace: true });
+    } catch (err) {
+      setError(err?.message || "Unable to reject job.");
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+  const handleArrive = async () => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setJob(await workerJobService.markArrived(job.id));
+      setMessage("Arrival marked. Ask the customer for the start OTP.");
+    } catch (err) {
+      setError(err?.message || "Unable to mark arrival.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otp.trim()) {
+      setError("Enter the customer start OTP.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError("");
+      setJob(await workerJobService.verifyJobOTP(job.id, otp));
+      setOtp("");
+      setMessage("OTP verified. Live location sharing has stopped.");
+    } catch (err) {
+      setError(err?.message || "Unable to verify OTP.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // ===================================================
@@ -526,20 +600,77 @@ const WorkerJobDetails = () => {
               </div>
 
               {canAccept ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="accept-job-btn"
+                    onClick={handleAcceptJob}
+                    disabled={accepting || rejecting}
+                  >
+                    {accepting ? "Accepting..." : "Accept Job"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn full-width"
+                    onClick={handleRejectJob}
+                    disabled={accepting || rejecting}
+                  >
+                    {rejecting ? "Rejecting..." : "Reject Job"}
+                  </button>
+                </div>
+              ) : job?.status === "accepted" ? (
+                <>
+                  <a
+                    href={getMapUrl()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="secondary-btn full-width"
+                  >
+                    <Navigation size={17} />
+                    Navigate to Customer
+                  </a>
+                  <button
+                    type="button"
+                    className="accept-job-btn"
+                    onClick={handleStartTravel}
+                    disabled={actionLoading}
+                  >
+                    <Navigation size={17} />
+                    {actionLoading ? "Starting..." : "Start Travel"}
+                  </button>
+                </>
+              ) : job?.status === "on_the_way" ? (
                 <button
                   type="button"
                   className="accept-job-btn"
-                  onClick={
-                    handleAcceptJob
-                  }
-                  disabled={
-                    accepting
-                  }
+                  onClick={handleArrive}
+                  disabled={actionLoading}
                 >
-                  {accepting
-                    ? "Accepting..."
-                    : "Accept Job"}
+                  {actionLoading ? "Updating..." : "I've Arrived"}
                 </button>
+              ) : job?.status === "arrived" ? (
+                <div className="details-card">
+                  <strong>Enter Customer Start OTP</strong>
+                  <input
+                    value={otp}
+                    onChange={(event) => setOtp(event.target.value)}
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="4-digit OTP"
+                  />
+                  <button
+                    type="button"
+                    className="accept-job-btn"
+                    onClick={handleVerifyOTP}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? "Verifying..." : "Verify OTP & Start Job"}
+                  </button>
+                </div>
+              ) : job?.status === "in_progress" ? (
+                <div className="dashboard-success">
+                  Service in progress. Live location sharing is off.
+                </div>
               ) : (
                 <div className="details-card">
                   <div className="empty-state">

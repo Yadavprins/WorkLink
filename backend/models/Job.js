@@ -73,6 +73,12 @@ const jobSchema = new mongoose.Schema(
             trim: true
         },
 
+        address: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
         location: {
             latitude: {
                 type: Number,
@@ -83,6 +89,26 @@ const jobSchema = new mongoose.Schema(
                 type: Number,
                 required: true
             }
+        },
+
+        workerLiveLocation: {
+            latitude: {
+                type: Number,
+                default: null
+            },
+            longitude: {
+                type: Number,
+                default: null
+            },
+            updatedAt: {
+                type: Date,
+                default: null
+            }
+        },
+
+        liveTrackingActive: {
+            type: Boolean,
+            default: false
         },
 
 
@@ -131,6 +157,35 @@ const jobSchema = new mongoose.Schema(
             min: 0
         },
 
+        platformFee: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
+        discount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
+        invoiceNumber: {
+            type: String,
+            default: null,
+            trim: true
+        },
+
+        completionNotes: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
+        completionPhotos: {
+            type: [String],
+            default: []
+        },
+
 
         // ==================================================
         // ASSIGNED WORKER
@@ -140,6 +195,12 @@ const jobSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Worker",
             default: null
+        },
+
+        workerQuote: {
+            type: Number,
+            default: null,
+            min: 0
         },
 
 
@@ -216,6 +277,24 @@ const jobSchema = new mongoose.Schema(
             default: null
         },
 
+        customerRating: {
+            type: Number,
+            min: 1,
+            max: 5,
+            default: null
+        },
+
+        customerReview: {
+            type: String,
+            trim: true,
+            default: null
+        },
+
+        customerRatedAt: {
+            type: Date,
+            default: null
+        },
+
 
         // ==================================================
         // CANCELLATION
@@ -242,6 +321,16 @@ const jobSchema = new mongoose.Schema(
             default: null
         },
 
+        arrivedAt: {
+            type: Date,
+            default: null
+        },
+
+        startedAt: {
+            type: Date,
+            default: null
+        },
+
 
         // ==================================================
         // JOB STATUS
@@ -252,8 +341,10 @@ const jobSchema = new mongoose.Schema(
             enum: [
                 "posted",
                 "searching",
+                "no_worker_found",
                 "accepted",
                 "on_the_way",
+                "arrived",
                 "otp_verified",
                 "in_progress",
                 "completed",

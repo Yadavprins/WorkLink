@@ -1,5 +1,7 @@
 const Worker = require("../models/Worker");
 const Job = require("../models/Job");
+const { getRequiredSkill } = require("../utils/skillMap");
+const { expireAndFinalizeDispatches } = require("../services/dispatchService");
 
 
 // ======================================================
@@ -211,11 +213,20 @@ const updateMyProfile = async (req, res) => {
         const {
             name,
             phone,
-            city,
-            area,
             skills,
             experience
         } = req.body;
+
+        if (
+            req.body?.city !== undefined ||
+            req.body?.area !== undefined
+        ) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    "Worker address is permanent. Contact Customer Care to request a change."
+            });
+        }
 
 
         // ----------------------------------------------
@@ -247,24 +258,6 @@ const updateMyProfile = async (req, res) => {
             }
 
             worker.phone = value;
-        }
-
-
-        // ----------------------------------------------
-        // AREA CAN ALWAYS BE CHANGED
-        // ----------------------------------------------
-
-        if (area !== undefined) {
-            const value = String(area).trim();
-
-            if (!value) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Area cannot be empty"
-                });
-            }
-
-            worker.area = value;
         }
 
 
@@ -310,48 +303,6 @@ const updateMyProfile = async (req, res) => {
             }
 
             worker.experience = numericExperience;
-        }
-
-
-        // ----------------------------------------------
-        // DISTRICT / CITY
-        //
-        // District can be changed only ONCE.
-        // GPS does NOT change district.
-        // ----------------------------------------------
-
-        if (city !== undefined) {
-            const newCity = String(city).trim();
-
-            if (!newCity) {
-                return res.status(400).json({
-                    success: false,
-                    message: "District cannot be empty"
-                });
-            }
-
-            const oldCity = String(worker.city || "").trim();
-
-            const districtChanged =
-                normalize(newCity) !== normalize(oldCity);
-
-
-            if (districtChanged) {
-
-                if (worker.districtChangeUsed) {
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            "District can only be changed once"
-                    });
-                }
-
-                worker.city = newCity;
-                worker.districtChangeUsed = true;
-
-            } else {
-                worker.city = newCity;
-            }
         }
 
 
@@ -430,6 +381,25 @@ const updateAvailability = async (req, res) => {
         worker.isAvailable = isAvailable;
 
         await worker.save();
+
+        await Job.updateOne(
+            {
+                assignedWorker: worker._id,
+                status: {
+                    $in: ["on_the_way", "arrived"]
+                },
+                liveTrackingActive: true
+            },
+            {
+                $set: {
+                    workerLiveLocation: {
+                        latitude,
+                        longitude,
+                        updatedAt: new Date()
+                    }
+                }
+            }
+        );
 
         return res.status(200).json({
             success: true,
@@ -556,7 +526,6 @@ const getWorkerDashboard = async (req, res) => {
         ) {
 
             const jobs = await Job.find({
-                city: worker.city,
                 status: {
                     $in: AVAILABLE_JOB_STATUSES
                 },
@@ -575,13 +544,19 @@ const getWorkerDashboard = async (req, res) => {
             nearbyJobs = jobs
                 .filter((job) => {
 
+                    const acceptedSkills = [
+                        job.requiredSkill,
+                        job.category,
+                        getRequiredSkill(job.category, "")
+                    ]
+                        .filter(Boolean)
+                        .map(normalize);
+
                     const skillMatch =
                         worker.skills.some(
                             (workerSkill) =>
-                                normalize(workerSkill) ===
-                                normalize(
-                                    job.requiredSkill ||
-                                    job.category
+                                acceptedSkills.includes(
+                                    normalize(workerSkill)
                                 )
                         );
 
@@ -782,7 +757,6 @@ const searchWorkerJobs = async (req, res) => {
 
 
         const query = {
-            city: worker.city,
             status: {
                 $in: AVAILABLE_JOB_STATUSES
             },
@@ -901,6 +875,10 @@ const searchWorkerJobs = async (req, res) => {
             })
             .limit(parsedLimit);
 
+        await Promise.all(
+            jobs.map((job) => expireAndFinalizeDispatches(job._id))
+        );
+
 
         // --------------------------------------------------
         // ACTUAL GPS DISTANCE + WORKER SKILL MATCH
@@ -913,12 +891,21 @@ const searchWorkerJobs = async (req, res) => {
                     job.requiredSkill ||
                     job.category;
 
+                const acceptedSkills = [
+                    job.requiredSkill,
+                    job.category,
+                    getRequiredSkill(job.category, "")
+                ]
+                    .filter(Boolean)
+                    .map(normalize);
+
                 const workerHasSkill =
                     Array.isArray(worker.skills) &&
                     worker.skills.some(
                         (workerSkill) =>
-                            normalize(workerSkill) ===
-                            normalize(jobSkill)
+                            acceptedSkills.includes(
+                                normalize(workerSkill)
+                            )
                     );
 
                 if (!workerHasSkill) {

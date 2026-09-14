@@ -5,6 +5,7 @@ import {
     LockKeyhole,
     Mail,
     MapPin,
+    Navigation,
     Phone,
     User,
 } from "lucide-react";
@@ -33,6 +34,11 @@ function RegisterPage() {
 
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [locating, setLocating] = useState(false);
+    const [coordinates, setCoordinates] = useState({
+        latitude: null,
+        longitude: null,
+    });
 
     const roleNames = {
         customer: "Customer",
@@ -55,6 +61,62 @@ function RegisterPage() {
         if (error) {
             setError("");
         }
+    };
+
+    const detectAddress = () => {
+        if (!navigator.geolocation) {
+            setError("Location is not supported by this browser.");
+            return;
+        }
+
+        setLocating(true);
+        setError("");
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const latitude = position.coords.latitude;
+                const longitude = position.coords.longitude;
+
+                setCoordinates({ latitude, longitude });
+
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+                        { headers: { Accept: "application/json" } }
+                    );
+                    const data = await response.json();
+                    const address = data?.address || {};
+
+                    setForm((previous) => ({
+                        ...previous,
+                        city:
+                            address.city ||
+                            address.town ||
+                            address.village ||
+                            address.municipality ||
+                            address.county ||
+                            previous.city,
+                        area:
+                            address.suburb ||
+                            address.neighbourhood ||
+                            address.residential ||
+                            address.road ||
+                            previous.area,
+                    }));
+                } catch {
+                    setError(
+                        "Location detected, but address could not be filled. Enter it manually."
+                    );
+                } finally {
+                    setLocating(false);
+                }
+            },
+            () => {
+                setLocating(false);
+                setError("Please allow location access or enter address manually.");
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
     };
 
     const handleSubmit = async (event) => {
@@ -125,6 +187,8 @@ function RegisterPage() {
                 password,
                 city,
                 area,
+                latitude: coordinates.latitude,
+                longitude: coordinates.longitude,
                 skills: form.skills,
                 experience: form.experience,
                 role,
@@ -358,6 +422,16 @@ function RegisterPage() {
                                 />
                             </div>
                         </label>
+
+                        <button
+                            type="button"
+                            className="secondary-btn full-width"
+                            onClick={detectAddress}
+                            disabled={loading || locating}
+                        >
+                            <Navigation size={17} />
+                            {locating ? "Detecting location..." : "Detect Address Automatically"}
+                        </button>
 
 
                         {/* WORKER FIELDS */}

@@ -16,10 +16,20 @@ const {
 } = require("../services/priceService");
 
 const generateOTP = require("../utils/generateOTP");
+const { getRequiredSkill } = require("../utils/skillMap");
+const debugLog = require("../utils/debugLog");
 
 const {
     createNotification
 } = require("../services/notificationService");
+
+const {
+    dispatchJob,
+    expireDispatches,
+    expireAndFinalizeDispatches,
+    rejectDispatch,
+    acceptDispatch
+} = require("../services/dispatchService");
 
 // ======================================================
 // CONSTANTS
@@ -116,10 +126,13 @@ const createJob = async (req, res) => {
             image,
             city,
             area,
+            location,
             latitude,
             longitude,
             urgency,
-            bookingType
+            bookingType,
+            minBudget,
+            maxBudget
         } = req.body || {};
 
         if (
@@ -127,6 +140,7 @@ const createJob = async (req, res) => {
             !description ||
             !city ||
             !area ||
+            !location ||
             latitude === undefined ||
             longitude === undefined ||
             !bookingType
@@ -149,6 +163,9 @@ const createJob = async (req, res) => {
 
         const cleanArea =
             String(area).trim();
+
+        const cleanAddress =
+            String(location).trim();
 
         if (
             cleanTitle.length < 3 ||
@@ -223,13 +240,14 @@ const createJob = async (req, res) => {
         }
 
         const finalCategory =
-            aiPrediction?.category ||
             category ||
+            aiPrediction?.category ||
             "Other";
 
         const finalRequiredSkill =
-            aiPrediction?.requiredSkill ||
             requiredSkill ||
+            getRequiredSkill(finalCategory, "") ||
+            aiPrediction?.requiredSkill ||
             "General Worker";
 
         const finalDifficulty =
@@ -316,6 +334,9 @@ const createJob = async (req, res) => {
             area:
                 cleanArea,
 
+            address:
+                cleanAddress,
+
             location: {
                 latitude: lat,
                 longitude: lng
@@ -327,10 +348,14 @@ const createJob = async (req, res) => {
             bookingType,
 
             estimatedMinPrice:
-                priceEstimate.minPrice,
+                Number(minBudget) > 0
+                    ? Number(minBudget)
+                    : priceEstimate.minPrice,
 
             estimatedMaxPrice:
-                priceEstimate.maxPrice,
+                Number(maxBudget) > 0
+                    ? Number(maxBudget)
+                    : priceEstimate.maxPrice,
 
             finalPrice:
                 0,
@@ -379,6 +404,30 @@ const createJob = async (req, res) => {
             job:
                 job._id
         });
+
+        const dispatchResult = await dispatchJob(job, notify);
+
+        if (dispatchResult.dispatches.length > 0) {
+            job.status = "searching";
+            await job.save();
+        } else {
+            job.status = "no_worker_found";
+            await job.save();
+        }
+
+        // #region agent log
+        debugLog(
+            "jobController.js:createJob",
+            "Job created",
+            {
+                bookingType,
+                category: finalCategory,
+                requiredSkill: finalRequiredSkill,
+                hasCoords: true,
+            },
+            "B"
+        );
+        // #endregion
 
         return res.status(201).json({
             success: true,
@@ -515,9 +564,7 @@ const getJobDetails = async (
     res
 ) => {
     try {
-        const {
-            jobId
-        } = req.params;
+        const { jobId } = req.params;
 
         if (
             !isValidObjectId(jobId)
@@ -553,6 +600,19 @@ const getJobDetails = async (
                     "Job not found"
             });
         }
+
+        // #region agent log
+        debugLog(
+            "jobController.js:getJobDetails",
+            "Customer job details",
+            {
+                status: job.status,
+                hasOtp: Boolean(job.otp),
+                hasLat: job.location?.latitude != null,
+            },
+            "D"
+        );
+        // #endregion
 
         return res.status(200).json({
             success: true,
@@ -768,9 +828,8 @@ const acceptJob = async (
     res
 ) => {
     try {
-        const {
-            jobId
-        } = req.params;
+        const { jobId } = req.params;
+        const { quoteAmount } = req.body || {};
 
         if (
             !isValidObjectId(jobId)
@@ -877,27 +936,18 @@ const acceptJob = async (
             });
         }
 
-        if (
-            normalize(job.city) !==
-            normalize(worker.city)
-        ) {
-            return res.status(403).json({
-                success: false,
-                message:
-                    "This job is outside your city"
-            });
-        }
+        const acceptedSkills = [
+            job.requiredSkill,
+            job.category,
+            getRequiredSkill(job.category, "")
+        ]
+            .filter(Boolean)
+            .map(normalize);
 
         const hasRequiredSkill =
-            Array.isArray(
-                worker.skills
-            ) &&
-            worker.skills.some(
-                skill =>
-                    normalize(skill) ===
-                    normalize(
-                        job.requiredSkill
-                    )
+            Array.isArray(worker.skills) &&
+            worker.skills.some((skill) =>
+                acceptedSkills.includes(normalize(skill))
             );
 
         if (!hasRequiredSkill) {
@@ -950,9 +1000,81 @@ const acceptJob = async (
             });
         }
 
+        let workerQuote = null;
+
+        if (job.bookingType === "quote") {
+            if (
+                !Number.isFinite(quoteAmount) ||
+                quoteAmount <= 0
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Please enter a quote amount before accepting this job"
+                });
+            }
+
+            const min = Number(job.estimatedMinPrice || 0);
+            const max = Number(job.estimatedMaxPrice || 0);
+
+            if (min > 0 && quoteAmount < min) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        `Quote must be at least ₹${min}`
+                });
+            }
+
+            if (max > 0 && quoteAmount > max) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        `Quote cannot exceed the customer budget of ₹${max}`
+                });
+            }
+
+            workerQuote = Number(quoteAmount.toFixed(2));
+        }
+
         // ==================================================
         // ATOMIC JOB ASSIGNMENT
         // ==================================================
+
+        const assignmentUpdate = {
+            assignedWorker:
+                worker._id,
+
+            status:
+                "accepted"
+        };
+
+        if (workerQuote !== null) {
+            assignmentUpdate.workerQuote = workerQuote;
+        }
+
+        const lockedWorker =
+            await Worker.findOneAndUpdate(
+                {
+                    _id: worker._id,
+                    isAvailable: true
+                },
+                {
+                    $set: {
+                        isAvailable: false
+                    },
+                    $inc: {
+                        acceptedJobs: 1
+                    }
+                },
+                { new: true }
+            );
+
+        if (!lockedWorker) {
+            return res.status(409).json({
+                success: false,
+                message: "You already have an active job"
+            });
+        }
 
         const updatedJob =
             await Job.findOneAndUpdate(
@@ -970,13 +1092,7 @@ const acceptJob = async (
                 },
 
                 {
-                    $set: {
-                        assignedWorker:
-                            worker._id,
-
-                        status:
-                            "accepted"
-                    }
+                    $set: assignmentUpdate
                 },
 
                 {
@@ -993,6 +1109,18 @@ const acceptJob = async (
                 );
 
         if (!updatedJob) {
+            await Worker.findByIdAndUpdate(
+                worker._id,
+                {
+                    $set: {
+                        isAvailable: true
+                    },
+                    $inc: {
+                        acceptedJobs: -1
+                    }
+                }
+            );
+
             return res.status(409).json({
                 success: false,
                 message:
@@ -1000,23 +1128,7 @@ const acceptJob = async (
             });
         }
 
-        // ==================================================
-        // WORKER COUNTER
-        // ==================================================
-
-        await Worker.findByIdAndUpdate(
-            worker._id,
-            {
-                $inc: {
-                    acceptedJobs: 1
-                },
-
-                $set: {
-                    isAvailable:
-                        false
-                }
-            }
-        );
+        await acceptDispatch(jobId, worker._id);
 
         // ==================================================
         // CUSTOMER NOTIFICATION
@@ -1068,6 +1180,52 @@ const acceptJob = async (
             success: false,
             message:
                 "Server error while accepting job"
+        });
+    }
+};
+
+const rejectJob = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID"
+            });
+        }
+
+        const dispatch = await rejectDispatch(
+            jobId,
+            req.user.id
+        );
+
+        if (!dispatch) {
+            return res.status(409).json({
+                success: false,
+                message: "This job request is no longer active"
+            });
+        }
+
+        const job = await Job.findById(jobId);
+        if (job) {
+            const nextDispatch = await dispatchJob(job, notify);
+            job.status = nextDispatch.dispatches.length
+                ? "searching"
+                : "no_worker_found";
+            await job.save();
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Job request rejected"
+        });
+    } catch (error) {
+        console.error("Reject job error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while rejecting job"
         });
     }
 };
@@ -1142,6 +1300,15 @@ const startTravel = async (
         job.status =
             "on_the_way";
 
+        job.liveTrackingActive =
+            true;
+
+        job.workerLiveLocation = {
+            latitude: worker.location?.latitude ?? null,
+            longitude: worker.location?.longitude ?? null,
+            updatedAt: new Date()
+        };
+
         await job.save();
 
         await notify({
@@ -1170,13 +1337,8 @@ const startTravel = async (
             message:
                 "Worker is on the way",
 
-            jobId:
-                job._id,
-
-            status:
-                job.status,
-
-            otp
+            job:
+                job
         });
 
     } catch (error) {
@@ -1189,6 +1351,64 @@ const startTravel = async (
             success: false,
             message:
                 "Server error while starting travel"
+        });
+    }
+};
+
+const arriveJob = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const worker = await Worker.findById(req.user.id);
+
+        if (!worker || !isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid worker or job ID"
+            });
+        }
+
+        const job = await Job.findOneAndUpdate(
+            {
+                _id: jobId,
+                assignedWorker: worker._id,
+                status: "on_the_way"
+            },
+            {
+                $set: {
+                    status: "arrived",
+                    arrivedAt: new Date()
+                }
+            },
+            { new: true }
+        );
+
+        if (!job) {
+            return res.status(409).json({
+                success: false,
+                message: "Job is not currently on the way"
+            });
+        }
+
+        await notify({
+            recipient: job.customer,
+            recipientRole: "customer",
+            type: "worker_on_the_way",
+            title: "Worker Has Arrived",
+            message: `The worker has arrived for "${job.title}". Please share the start OTP.`,
+            job: job._id
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Arrival marked successfully",
+            job
+        });
+    } catch (error) {
+        console.error("Arrive job error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while marking arrival"
         });
     }
 };
@@ -1253,8 +1473,9 @@ const verifyJobOTP = async (
                 assignedWorker:
                     worker._id,
 
-                status:
-                    "on_the_way"
+                status: {
+                    $in: ["on_the_way", "arrived"]
+                }
             });
 
         if (!job) {
@@ -1294,6 +1515,18 @@ const verifyJobOTP = async (
 
         job.status =
             "in_progress";
+
+        job.startedAt =
+            new Date();
+
+        job.liveTrackingActive =
+            false;
+
+        job.workerLiveLocation = {
+            latitude: null,
+            longitude: null,
+            updatedAt: new Date()
+        };
 
         await job.save();
 
@@ -1584,6 +1817,10 @@ const makePayment = async (
         job.transactionId =
             transactionId;
 
+        job.platformFee = 0;
+        job.discount = 0;
+        job.invoiceNumber = `INV_${Date.now()}`;
+
         job.paidAt =
             new Date();
 
@@ -1629,7 +1866,16 @@ const makePayment = async (
                     job.transactionId,
 
                 paidAt:
-                    job.paidAt
+                    job.paidAt,
+
+                invoiceNumber:
+                    job.invoiceNumber,
+
+                platformFee:
+                    job.platformFee,
+
+                discount:
+                    job.discount
             },
 
             jobId:
@@ -1662,6 +1908,11 @@ const completeJob = async (
         const {
             jobId
         } = req.params;
+
+        const {
+            notes = "",
+            photos = []
+        } = req.body || {};
 
         if (
             !isValidObjectId(jobId)
@@ -1731,6 +1982,11 @@ const completeJob = async (
         job.status =
             "completed";
 
+        job.completionNotes = String(notes).trim().slice(0, 2000);
+        job.completionPhotos = Array.isArray(photos)
+            ? photos.map((photo) => String(photo).trim()).filter(Boolean).slice(0, 10)
+            : [];
+
         await job.save();
 
         await Worker.findByIdAndUpdate(
@@ -1742,7 +1998,7 @@ const completeJob = async (
 
                 $set: {
                     isAvailable:
-                        false
+                        true
                 }
             }
         );
@@ -2260,6 +2516,63 @@ const cancelJob = async (
     }
 };
 
+const deleteJob = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID"
+            });
+        }
+
+        const job = await Job.findOne({
+            _id: jobId,
+            customer: req.user.id
+        });
+
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found"
+            });
+        }
+
+        if (
+            job.assignedWorker ||
+            [
+                "accepted",
+                "on_the_way",
+                "otp_verified",
+                "in_progress",
+                "completed"
+            ].includes(job.status) ||
+            job.paymentStatus === "paid"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "This job cannot be deleted after work has started"
+            });
+        }
+
+        await Job.deleteOne({ _id: job._id });
+
+        return res.status(200).json({
+            success: true,
+            message: "Job deleted successfully"
+        });
+    } catch (error) {
+        console.error("Delete job error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while deleting job"
+        });
+    }
+};
+
 // ======================================================
 // EXPORTS
 // ======================================================
@@ -2271,11 +2584,14 @@ module.exports = {
     getJobDetails,
     getAvailableJobs,
     acceptJob,
+    rejectJob,
     startTravel,
+    arriveJob,
     verifyJobOTP,
     setFinalPrice,
     makePayment,
     completeJob,
     rateWorker,
-    cancelJob
+    cancelJob,
+    deleteJob
 };

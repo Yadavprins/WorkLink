@@ -11,6 +11,7 @@ import {
 
 import {
   useRef,
+  useEffect,
   useState,
 } from "react";
 
@@ -97,7 +98,7 @@ const CreateJob = () => {
     setError,
   ] = useState("");
 
-  const categories = [
+  const defaultCategories = [
     "Plumbing",
     "Electrical",
     "AC & Appliance",
@@ -107,6 +108,29 @@ const CreateJob = () => {
     "Vehicle Repair",
     "Other",
   ];
+
+  const [categories, setCategories] =
+    useState(defaultCategories);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/admin/categories`)
+      .then((response) => response.json())
+      .then((data) => {
+        const remoteCategories = Array.isArray(data?.categories)
+          ? data.categories
+              .filter((category) => category.isActive !== false)
+              .map((category) => category.name)
+              .filter(Boolean)
+          : [];
+
+        if (remoteCategories.length > 0) {
+          setCategories(remoteCategories);
+        }
+      })
+      .catch(() => {
+        // Keep the local service list when the catalog is unavailable.
+      });
+  }, []);
 
   // =====================================================
   // FORM CHANGE

@@ -110,6 +110,7 @@ const normalizeJob = (job) => {
 
   if (!location) {
     location = [
+      job.address,
       job.area,
       job.city,
     ]
@@ -237,9 +238,25 @@ const workerJobService = {
         }
       );
 
-    return normalizeJob(
-      data?.job ||
-        data?.data
+    return {
+      ...(normalizeJob(
+        data?.job ||
+          data?.data
+      ) || {}),
+      id,
+      _id: id,
+      status: data?.status || "in_progress",
+    };
+  },
+
+  async rejectJob(id) {
+    if (!id) {
+      throw new Error("Job ID is required.");
+    }
+
+    return request(
+      `/jobs/${id}/reject`,
+      { method: "PATCH" }
     );
   },
 
@@ -281,6 +298,31 @@ const workerJobService = {
     );
   },
 
+  async markArrived(id) {
+    if (!id) {
+      throw new Error("Job ID is required.");
+    }
+
+    const data = await request(
+      `/jobs/${id}/arrived`,
+      { method: "PATCH" }
+    );
+
+    return normalizeJob(data?.job || data?.data);
+  },
+
+  async updateLocation(latitude, longitude) {
+    const data = await request(
+      "/workers/location",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ latitude, longitude }),
+      }
+    );
+
+    return data?.location || null;
+  },
+
   // ===================================================
   // VERIFY OTP
   // ===================================================
@@ -300,10 +342,15 @@ const workerJobService = {
         }
       );
 
-    return normalizeJob(
-      data?.job ||
-        data?.data
-    );
+    return {
+      ...(normalizeJob(
+        data?.job ||
+          data?.data
+      ) || {}),
+      id,
+      _id: id,
+      status: data?.status || "in_progress",
+    };
   },
 };
 

@@ -131,6 +131,7 @@ const normalizeJob = (job) => {
 
   if (!locationText) {
     locationText = [
+      job.address,
       job.area,
       job.city,
     ]
@@ -185,6 +186,42 @@ const normalizeJob = (job) => {
   };
 };
 
+const formatTransactionDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleDateString();
+};
+
+const normalizeTransaction = (job, type) => {
+  const isEarning = type === "Earning";
+  const amount = Number(
+    job.finalPrice ||
+      job.workerQuote ||
+      job.estimatedMaxPrice ||
+      job.estimatedMinPrice ||
+      0
+  );
+
+  return {
+    id:
+      job.transactionId ||
+      `JOB-${job._id || job.id}`,
+    job: job.title || "Untitled Job",
+    type,
+    amount,
+    method: job.paymentMethod || (isEarning ? "-" : "mock"),
+    status:
+      job.paymentStatus === "paid"
+        ? "Completed"
+        : "Pending",
+    date: formatTransactionDate(
+      job.paidAt || job.updatedAt || job.createdAt
+    ),
+  };
+};
+
 const jobService = {
   // ===================================================
   // CUSTOMER - MY JOBS
@@ -200,6 +237,48 @@ const jobService = {
       : [];
 
     return jobs.map(normalizeJob);
+  },
+
+  // ===================================================
+  // PAYMENTS AND EARNINGS
+  // ===================================================
+
+  async getTransactions() {
+    const user = JSON.parse(
+      localStorage.getItem("nexserve_user") || "null"
+    );
+
+    if (user?.role === "worker") {
+      const data = await request(
+        "/workers/earnings"
+      );
+
+      const jobs = Array.isArray(data?.earnings?.jobs)
+        ? data.earnings.jobs
+        : [];
+
+      return jobs.map((job) =>
+        normalizeTransaction(job, "Earning")
+      );
+    }
+
+    const data = await request(
+      "/jobs/my-jobs"
+    );
+
+    const jobs = Array.isArray(data?.jobs)
+      ? data.jobs
+      : [];
+
+    return jobs
+      .filter((job) =>
+        ["pending", "paid"].includes(
+          job.paymentStatus
+        )
+      )
+      .map((job) =>
+        normalizeTransaction(job, "Payment")
+      );
   },
 
   // ===================================================
@@ -312,6 +391,19 @@ const jobService = {
     return normalizeJob(
       data?.job ||
         data?.data
+    );
+  },
+
+  async deleteJob(id) {
+    if (!id) {
+      throw new Error("Job ID is required.");
+    }
+
+    return request(
+      `/jobs/${id}`,
+      {
+        method: "DELETE",
+      }
     );
   },
 };

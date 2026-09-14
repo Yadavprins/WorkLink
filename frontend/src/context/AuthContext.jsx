@@ -240,15 +240,12 @@ export const AuthProvider = ({
         role = "customer",
       }) => {
         const normalizedRole =
-          role === "worker"
-            ? "worker"
+          ["customer", "worker", "admin"].includes(role)
+            ? role
             : "customer";
 
         const endpoint =
-          normalizedRole ===
-          "worker"
-            ? "/auth/worker/login"
-            : "/auth/customer/login";
+          `/auth/${normalizedRole}/login`;
 
         const response =
           await fetch(

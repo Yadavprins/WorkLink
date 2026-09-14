@@ -7,13 +7,16 @@ const {
     getJobDetails,
     getAvailableJobs,
     acceptJob,
+    rejectJob,
     startTravel,
+    arriveJob,
     verifyJobOTP,
     setFinalPrice,
     makePayment,
     completeJob,
     rateWorker,
-    cancelJob
+    cancelJob,
+    deleteJob
 } = require("../controllers/jobController");
 
 const {
@@ -107,6 +110,13 @@ router.patch(
     acceptJob
 );
 
+router.patch(
+    "/:jobId/reject",
+    protect,
+    authorize("worker"),
+    rejectJob
+);
+
 
 // Worker starts travelling to customer
 router.patch(
@@ -114,6 +124,13 @@ router.patch(
     protect,
     authorize("worker"),
     startTravel
+);
+
+router.patch(
+    "/:jobId/arrived",
+    protect,
+    authorize("worker"),
+    arriveJob
 );
 
 
@@ -179,6 +196,13 @@ router.patch(
     protect,
     authorize("customer"),
     cancelJob
+);
+
+router.delete(
+    "/:jobId",
+    protect,
+    authorize("customer"),
+    deleteJob
 );
 
 

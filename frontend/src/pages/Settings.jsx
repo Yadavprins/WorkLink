@@ -149,14 +149,14 @@ const Settings = () => {
           method: "PATCH",
           headers: getHeaders(),
           body: JSON.stringify({
-            name:
-              profile.name.trim(),
-            phone:
-              profile.phone.trim(),
-            city:
-              profile.city.trim(),
-            area:
-              profile.area.trim(),
+            name: profile.name.trim(),
+            phone: profile.phone.trim(),
+            ...(role === "customer"
+              ? {
+                  city: profile.city.trim(),
+                  area: profile.area.trim(),
+                }
+              : {}),
           }),
         });
 
@@ -449,331 +449,127 @@ const Settings = () => {
   };
 
   return (
-    <div
-      style={{
-        maxWidth: "1000px",
-        margin: "0 auto",
-        padding: "24px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "14px",
-          marginBottom: "28px",
-        }}
-      >
-        <Link
-          to={dashboardPath}
-          className="back-btn"
-        >
+    <div style={pageWrap}>
+      <div style={topBar}>
+        <Link to={dashboardPath} className="back-btn">
           <ArrowLeft size={18} />
           Back
         </Link>
 
         <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "30px",
-            }}
-          >
-            Settings
-          </h1>
-
-          <p
-            style={{
-              marginTop: "8px",
-              color: "#666",
-            }}
-          >
-            Manage your NexServe account
-            and location.
-          </p>
+          <p style={eyebrow}>Account</p>
+          <h1 style={heading}>Settings</h1>
         </div>
       </div>
 
       {message && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "12px 14px",
-            borderRadius: "8px",
-            background: "#e8f7ee",
-            color: "#176b38",
-          }}
-        >
-          <CheckCircle2
-            size={16}
-            style={{
-              verticalAlign:
-                "middle",
-              marginRight: "7px",
-            }}
-          />
-
+        <div style={successMessage}>
+          <CheckCircle2 size={16} style={iconInline} />
           {message}
         </div>
       )}
 
-      {error && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "12px 14px",
-            borderRadius: "8px",
-            background: "#fdecec",
-            color: "#b42318",
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div style={errorMessage}>{error}</div>}
 
-      <section
-        style={cardStyle}
-      >
-        <div
-          style={sectionHeaderStyle}
-        >
-          <div>
-            <h2
-              style={{
-                margin: 0,
-              }}
-            >
-              <UserRound
-                size={19}
-                style={{
-                  verticalAlign:
-                    "middle",
-                  marginRight: "7px",
-                }}
+      <div style={gridLayout}>
+        <section style={cardStyle}>
+          <div style={sectionHeaderStyle}>
+            <div style={sectionHeadingWrap}>
+              <UserRound size={19} style={iconInline} />
+              <div>
+                <h2 style={cardTitle}>Profile</h2>
+                <p style={mutedText}>Update your personal information.</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSave}>
+            <div style={fieldGrid}>
+              <Field label="Name" name="name" value={profile.name} onChange={handleProfileChange} required />
+              <Field label="Email" name="email" value={profile.email} disabled />
+              <Field label="Phone" name="phone" value={profile.phone} onChange={handleProfileChange} required />
+              <Field
+                label="City"
+                name="city"
+                value={profile.city}
+                onChange={role === "customer" ? handleProfileChange : undefined}
+                disabled={role === "worker"}
+                required
               />
-              Profile
-            </h2>
+              <Field
+                label="Area"
+                name="area"
+                value={profile.area}
+                onChange={role === "customer" ? handleProfileChange : undefined}
+                disabled={role === "worker"}
+                required
+              />
+            </div>
 
-            <p
-              style={{
-                color: "#666",
-              }}
-            >
-              Keep your account information
-              up to date.
-            </p>
-          </div>
-        </div>
+            {role === "worker" && (
+              <p style={helperNote}>
+                Worker address is permanent. Request changes from <a href="mailto:support@nexserve.local">Customer Care</a>.
+              </p>
+            )}
 
-        <form onSubmit={handleSave}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "16px",
-            }}
-          >
-            <Field
-              label="Name"
-              name="name"
-              value={profile.name}
-              onChange={handleProfileChange}
-              required
-            />
+            <button type="submit" disabled={saving} style={primaryButton}>
+              <Save size={16} style={iconInline} />
+              {saving ? "Saving..." : "Save Profile"}
+            </button>
+          </form>
+        </section>
 
-            <Field
-              label="Email"
-              name="email"
-              value={profile.email}
-              disabled
-            />
-
-            <Field
-              label="Phone"
-              name="phone"
-              value={profile.phone}
-              onChange={handleProfileChange}
-              required
-            />
-
-            <Field
-              label="District / City"
-              name="city"
-              value={profile.city}
-              onChange={handleProfileChange}
-              required
-            />
-
-            <Field
-              label="Area"
-              name="area"
-              value={profile.area}
-              onChange={handleProfileChange}
-              required
-            />
+        <section style={cardStyle}>
+          <div style={sectionHeaderStyle}>
+            <div style={sectionHeadingWrap}>
+              <ShieldCheck size={19} style={iconInline} />
+              <div>
+                <h2 style={cardTitle}>Account</h2>
+                <p style={mutedText}>Security and session.</p>
+              </div>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={saving}
-            style={primaryButton}
-          >
-            <Save
-              size={16}
-              style={{
-                verticalAlign:
-                  "middle",
-                marginRight: "6px",
-              }}
-            />
+          <div style={accountSummary}>
+            <div>
+              <span style={labelText}>Logged in as</span>
+              <strong style={strongText}>{role}</strong>
+            </div>
+            <div style={accountBadge}>{user?.name || "NexServe User"}</div>
+          </div>
 
-            {saving
-              ? "Saving..."
-              : "Save Profile"}
+          <button type="button" onClick={handleLogout} style={dangerButton}>
+            Logout
           </button>
-        </form>
-      </section>
+        </section>
+      </div>
 
-      <section
-        style={cardStyle}
-      >
-        <div
-          style={sectionHeaderStyle}
-        >
-          <div>
-            <h2
-              style={{
-                margin: 0,
-              }}
-            >
-              <MapPin
-                size={19}
-                style={{
-                  verticalAlign:
-                    "middle",
-                  marginRight: "7px",
-                }}
-              />
-              Location
-            </h2>
-
-            <p
-              style={{
-                color: "#666",
-              }}
-            >
-              Your GPS location is used
-              for nearby job matching.
-            </p>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "16px",
-            marginBottom: "16px",
-          }}
-        >
-          <div style={locationBoxStyle}>
-            <strong>
-              Latitude
-            </strong>
-
-            <div
-              style={{
-                marginTop: "6px",
-              }}
-            >
-              {location.latitude !==
-              null
-                ? location.latitude
-                : "Not set"}
-            </div>
-          </div>
-
-          <div style={locationBoxStyle}>
-            <strong>
-              Longitude
-            </strong>
-
-            <div
-              style={{
-                marginTop: "6px",
-              }}
-            >
-              {location.longitude !==
-              null
-                ? location.longitude
-                : "Not set"}
+      <section style={cardStyle}>
+        <div style={sectionHeaderStyle}>
+          <div style={sectionHeadingWrap}>
+            <MapPin size={19} style={iconInline} />
+            <div>
+              <h2 style={cardTitle}>Location</h2>
+              <p style={mutedText}>Your GPS location helps match nearby jobs.</p>
             </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={
-            updateCurrentLocation
-          }
-          disabled={locationSaving}
-          style={primaryButton}
-        >
-          <Crosshair
-            size={17}
-            style={{
-              verticalAlign:
-                "middle",
-              marginRight: "6px",
-            }}
-          />
+        <div style={locationGrid}>
+          <div style={locationBoxStyle}>
+            <strong>Latitude</strong>
+            <div style={locationValue}>{location.latitude !== null ? location.latitude : "Not set"}</div>
+          </div>
 
-          {locationSaving
-            ? "Getting Location..."
-            : "Use Current Location"}
-        </button>
-      </section>
+          <div style={locationBoxStyle}>
+            <strong>Longitude</strong>
+            <div style={locationValue}>{location.longitude !== null ? location.longitude : "Not set"}</div>
+          </div>
+        </div>
 
-      <section
-        style={cardStyle}
-      >
-        <h2
-          style={{
-            marginTop: 0,
-          }}
-        >
-          <ShieldCheck
-            size={19}
-            style={{
-              verticalAlign:
-                "middle",
-              marginRight: "7px",
-            }}
-          />
-          Account
-        </h2>
-
-        <p
-          style={{
-            color: "#666",
-          }}
-        >
-          Logged in as{" "}
-          <strong>
-            {role}
-          </strong>
-        </p>
-
-        <button
-          type="button"
-          onClick={
-            handleLogout
-          }
-          style={dangerButton}
-        >
-          Logout
+        <button type="button" onClick={updateCurrentLocation} disabled={locationSaving} style={primaryButton}>
+          <Crosshair size={17} style={iconInline} />
+          {locationSaving ? "Getting Location..." : "Use Current Location"}
         </button>
       </section>
     </div>
@@ -821,22 +617,144 @@ const Field = ({
   );
 };
 
+const pageWrap = {
+  maxWidth: "1100px",
+  margin: "0 auto",
+  padding: "24px",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const topBar = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "22px",
+};
+
+const eyebrow = {
+  margin: 0,
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.12em",
+  color: "#667085",
+  fontWeight: 700,
+};
+
+const heading = {
+  margin: "6px 0 0",
+  fontSize: "34px",
+  lineHeight: 1.1,
+  color: "#111827",
+};
+
+const gridLayout = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gap: "18px",
+  marginBottom: "18px",
+};
+
 const cardStyle = {
   background: "#fff",
-  border: "1px solid #e5e5e5",
-  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
   padding: "22px",
-  marginBottom: "20px",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)",
 };
 
 const sectionHeaderStyle = {
   marginBottom: "18px",
 };
 
+const sectionHeadingWrap = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const cardTitle = {
+  margin: 0,
+  fontSize: "20px",
+  color: "#111827",
+};
+
+const mutedText = {
+  margin: "4px 0 0",
+  color: "#667085",
+  fontSize: "14px",
+};
+
+const fieldGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "16px",
+};
+
+const helperNote = {
+  margin: "16px 0 0",
+  color: "#475467",
+  fontSize: "13px",
+};
+
+const labelText = {
+  display: "block",
+  marginBottom: "6px",
+  color: "#475467",
+  fontSize: "12px",
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+};
+
+const accountSummary = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  padding: "16px",
+  background: "#f8fafc",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  marginBottom: "16px",
+};
+
+const accountBadge = {
+  background: "#111827",
+  color: "#fff",
+  padding: "8px 10px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: 700,
+  maxWidth: "180px",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const strongText = {
+  fontSize: "16px",
+  color: "#111827",
+};
+
+const locationGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "16px",
+  marginBottom: "16px",
+};
+
 const locationBoxStyle = {
-  padding: "14px",
-  background: "#f8f8f8",
-  borderRadius: "8px",
+  padding: "14px 16px",
+  background: "#f8fafc",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+};
+
+const locationValue = {
+  marginTop: "8px",
+  fontSize: "14px",
+  color: "#111827",
 };
 
 const inputStyle = {
@@ -844,30 +762,65 @@ const inputStyle = {
   boxSizing: "border-box",
   marginTop: "6px",
   padding: "11px 12px",
-  border: "1px solid #ccc",
-  borderRadius: "7px",
+  border: "1px solid #d0d5dd",
+  borderRadius: "10px",
   fontSize: "14px",
+  background: "#fff",
+  color: "#111827",
+  outline: "none",
 };
 
 const primaryButton = {
   marginTop: "18px",
   padding: "11px 18px",
   border: "none",
-  borderRadius: "7px",
-  background: "#111827",
+  borderRadius: "10px",
+  background: "linear-gradient(135deg, #111827 0%, #1f2937 100%)",
   color: "#fff",
   cursor: "pointer",
-  fontWeight: "600",
+  fontWeight: "700",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
 };
 
 const dangerButton = {
   padding: "11px 18px",
   border: "none",
-  borderRadius: "7px",
-  background: "#dc2626",
+  borderRadius: "10px",
+  background: "#ef4444",
   color: "#fff",
   cursor: "pointer",
-  fontWeight: "600",
+  fontWeight: "700",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const successMessage = {
+  marginBottom: "16px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "#e8f7ee",
+  color: "#176b38",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  border: "1px solid #bbf7d0",
+};
+
+const errorMessage = {
+  marginBottom: "16px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "#fef2f2",
+  color: "#b42318",
+  border: "1px solid #fecaca",
+};
+
+const iconInline = {
+  verticalAlign: "middle",
 };
 
 export default Settings;

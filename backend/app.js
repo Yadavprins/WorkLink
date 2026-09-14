@@ -7,6 +7,7 @@ const workerRoutes = require("./routes/workerRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const customerRoutes = require("./routes/customerRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/workers", workerRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/customers", customerRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Centralized 404 response
 app.use((req, res) => {

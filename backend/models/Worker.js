@@ -107,6 +107,17 @@ const workerSchema = new mongoose.Schema(
             })
         },
 
+        role: {
+            type: String,
+            default: "worker",
+            enum: ["worker"]
+        },
+
+        isBlocked: {
+            type: Boolean,
+            default: false
+        },
+
         isAvailable: {
             type: Boolean,
             default: false

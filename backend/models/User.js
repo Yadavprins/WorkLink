@@ -62,6 +62,18 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: "customer",
             enum: ["customer"]
+        },
+
+        isBlocked: {
+            type: Boolean,
+            default: false
+        },
+
+        rating: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 5
         }
     },
     {

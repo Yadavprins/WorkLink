@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   Edit3,
+  Mail,
   MapPin,
   Navigation,
   Phone,
@@ -206,16 +207,6 @@ const WorkerProfile = () => {
         return;
       }
 
-      if (!form?.city?.trim()) {
-        setError("Please enter your district/city.");
-        return;
-      }
-
-      if (!form?.area?.trim()) {
-        setError("Please enter your service area.");
-        return;
-      }
-
       if (
         !Array.isArray(form.skills) ||
         form.skills.length === 0
@@ -236,27 +227,11 @@ const WorkerProfile = () => {
         return;
       }
 
-      const cityChanged =
-        String(form.city || "").trim().toLowerCase() !==
-        String(profile.city || "").trim().toLowerCase();
-
-      if (
-        cityChanged &&
-        profile.districtChangeUsed
-      ) {
-        setError(
-          "District/city can only be changed once."
-        );
-        return;
-      }
-
       const data = await apiRequest("/workers/profile", {
         method: "PATCH",
         body: JSON.stringify({
           name: form.name.trim(),
           phone: form.phone?.trim() || "",
-          city: form.city.trim(),
-          area: form.area.trim(),
           skills: form.skills,
           experience,
         }),
@@ -737,44 +712,10 @@ const WorkerProfile = () => {
                       District / City
                     </label>
 
-                    {editing ? (
-                      <>
-                        <input
-                          name="city"
-                          value={
-                            form.city || ""
-                          }
-                          onChange={
-                            handleChange
-                          }
-                          placeholder="Enter your district"
-                          disabled={
-                            profile.districtChangeUsed
-                          }
-                        />
-
-                        {profile.districtChangeUsed ? (
-                          <small>
-                            District already
-                            changed once.
-                            Further changes
-                            are not allowed.
-                          </small>
-                        ) : (
-                          <small>
-                            District can be
-                            changed only once.
-                          </small>
-                        )}
-                      </>
-                    ) : (
-                      <div className="profile-readonly">
-                        <MapPin size={15} />
-
-                        {profile.city ||
-                          "Not provided"}
-                      </div>
-                    )}
+                    <div className="profile-readonly">
+                      <MapPin size={15} />
+                      {profile.city || "Not provided"}
+                    </div>
                   </div>
 
                   <div className="profile-field">
@@ -782,39 +723,21 @@ const WorkerProfile = () => {
                       Service Area
                     </label>
 
-                    {editing ? (
-                      <input
-                        name="area"
-                        value={
-                          form.area || ""
-                        }
-                        onChange={
-                          handleChange
-                        }
-                        placeholder="e.g. Pipraich"
-                      />
-                    ) : (
-                      <div className="profile-readonly">
-                        <MapPin size={15} />
-
-                        {profile.area ||
-                          "Not provided"}
-                      </div>
-                    )}
+                    <div className="profile-readonly">
+                      <MapPin size={15} />
+                      {profile.area || "Not provided"}
+                    </div>
                   </div>
 
-                  {editing &&
-                    cityChanged &&
-                    !profile.districtChangeUsed && (
-                      <div className="profile-field full">
-                        <div className="job-action-message">
-                          Your district will be
-                          changed permanently
-                          after saving. You can
-                          change it only once.
-                        </div>
-                      </div>
-                    )}
+                  <div className="profile-field full">
+                    <a
+                      className="secondary-btn full-width"
+                      href="mailto:support@nexserve.local?subject=Worker%20address%20change%20request"
+                    >
+                      <Mail size={16} />
+                      Request Address Change from Customer Care
+                    </a>
+                  </div>
 
                   <div className="profile-field full">
                     <label>
