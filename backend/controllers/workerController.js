@@ -382,25 +382,6 @@ const updateAvailability = async (req, res) => {
 
         await worker.save();
 
-        await Job.updateOne(
-            {
-                assignedWorker: worker._id,
-                status: {
-                    $in: ["on_the_way", "arrived"]
-                },
-                liveTrackingActive: true
-            },
-            {
-                $set: {
-                    workerLiveLocation: {
-                        latitude,
-                        longitude,
-                        updatedAt: new Date()
-                    }
-                }
-            }
-        );
-
         return res.status(200).json({
             success: true,
             message: isAvailable
