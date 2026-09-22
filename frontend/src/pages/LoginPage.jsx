@@ -70,8 +70,10 @@ function LoginPage() {
     const redirectAfterLogin = (
         loggedUser
     ) => {
+        const activeUser =
+            loggedUser?.user || loggedUser;
         const loggedRole =
-            loggedUser?.role || role;
+            activeUser?.role || role;
 
         if (
             loggedRole === "customer"

@@ -194,7 +194,13 @@ function RegisterPage() {
                 role,
             });
 
-            if (registeredUser?.role === "worker") {
+            const activeUser =
+                registeredUser?.user ||
+                registeredUser;
+
+            if (
+                activeUser?.role === "worker"
+            ) {
                 navigate("/worker/dashboard");
             } else {
                 navigate("/customer/dashboard");

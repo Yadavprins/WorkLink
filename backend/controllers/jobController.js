@@ -2721,6 +2721,7 @@ module.exports = {
     makePayment,
     completeJob,
     rateWorker,
+    rateCustomer,
     cancelJob,
     deleteJob
 };
