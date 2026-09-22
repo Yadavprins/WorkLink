@@ -23,6 +23,9 @@ import {
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 import StatusBadge from "../../components/jobs/StatusBadge";
+import CommunicationPanel from "../../components/jobs/CommunicationPanel";
+import LiveTrackingMap from "../../components/jobs/LiveTrackingMap";
+import SOSButton from "../../components/jobs/SOSButton";
 import workerJobService from "../../services/workerJobService";
 
 const WorkerJobDetails = () => {
@@ -38,6 +41,9 @@ const WorkerJobDetails = () => {
   const [message, setMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [otp, setOtp] = useState("");
+  const [customerRating, setCustomerRating] = useState(0);
+  const [customerReview, setCustomerReview] = useState("");
+  const [submittingCustomerRating, setSubmittingCustomerRating] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -247,6 +253,35 @@ const WorkerJobDetails = () => {
     }
   };
 
+  const handleRateCustomer = async () => {
+    if (!job || submittingCustomerRating || customerRating < 1) {
+      return;
+    }
+
+    try {
+      setSubmittingCustomerRating(true);
+      setError("");
+
+      const result = await workerJobService.rateCustomer(job.id, {
+        rating: customerRating,
+        review: customerReview.trim(),
+      });
+
+      setJob((current) => ({
+        ...current,
+        customerRating: result?.rating ?? customerRating,
+        customerReview: result?.review ?? customerReview.trim(),
+      }));
+      setCustomerRating(0);
+      setCustomerReview("");
+      setMessage("Customer rating submitted successfully.");
+    } catch (err) {
+      setError(err?.message || "Unable to submit customer rating.");
+    } finally {
+      setSubmittingCustomerRating(false);
+    }
+  };
+
   // ===================================================
   // LOADING
   // ===================================================
@@ -360,6 +395,15 @@ const WorkerJobDetails = () => {
         />
 
         <main className="dashboard-content">
+          {job?.assignedWorker && (
+            <CommunicationPanel
+              jobId={job.id}
+              trackingActive={job.liveTrackingActive}
+              onTrackingUpdate={() => {}}
+            />
+          )}
+          <LiveTrackingMap destination={job?.locationCoordinates} />
+          {["accepted", "on_the_way", "arrived", "in_progress"].includes(job?.status) && <SOSButton jobId={job.id} />}
           <button
             type="button"
             className="back-btn"
@@ -670,6 +714,43 @@ const WorkerJobDetails = () => {
               ) : job?.status === "in_progress" ? (
                 <div className="dashboard-success">
                   Service in progress. Live location sharing is off.
+                </div>
+              ) : job?.status === "completed" ? (
+                <div className="details-card">
+                  <div className="details-card-header">
+                    <h2>Rate Customer</h2>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={value <= customerRating ? "primary-btn" : "secondary-btn"}
+                        style={{ minWidth: "42px", padding: "8px 10px" }}
+                        onClick={() => setCustomerRating(value)}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={customerReview}
+                    onChange={(event) => setCustomerReview(event.target.value)}
+                    rows={4}
+                    placeholder="Share feedback about the customer"
+                    style={{ width: "100%", resize: "vertical", marginBottom: "12px" }}
+                  />
+
+                  <button
+                    type="button"
+                    className="primary-btn full-width"
+                    onClick={handleRateCustomer}
+                    disabled={submittingCustomerRating || customerRating < 1}
+                  >
+                    {submittingCustomerRating ? "Submitting..." : "Submit Rating"}
+                  </button>
                 </div>
               ) : (
                 <div className="details-card">

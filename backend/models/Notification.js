@@ -28,6 +28,7 @@ const notificationSchema = new mongoose.Schema(
                 "payment",
                 "job_completed",
                 "job_cancelled",
+                "sos_alert",
                 "general"
             ],
             default: "general"

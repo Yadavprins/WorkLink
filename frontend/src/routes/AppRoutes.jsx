@@ -20,6 +20,7 @@ import CreateJob from "../pages/customer/CreateJob";
 import MyJobs from "../pages/customer/MyJobs";
 import JobDetails from "../pages/customer/JobDetails";
 import Workers from "../pages/customer/Workers";
+import ServiceMap from "../pages/customer/ServiceMap";
 
 // Worker
 import WorkerDashboard from "../pages/worker/WorkerDashboard";
@@ -28,6 +29,13 @@ import WorkerMyJobs from "../pages/worker/WorkerMyJobs";
 import WorkerJobDetails from "../pages/worker/WorkerJobDetails";
 import WorkerProfile from "../pages/worker/WorkerProfile";
 import WorkerEarnings from "../pages/worker/WorkerEarnings";
+
+// Admin
+import AdminDashboard from "../pages/admin/AdminDashboard";
+import Users from "../pages/admin/Users";
+import Jobs from "../pages/admin/Jobs";
+import Reports from "../pages/admin/Reports";
+import WorkerVerification from "../pages/admin/WorkerVerification";
 
 
 const ProtectedRoute = ({ children, requiredRole }) => {
@@ -89,6 +97,15 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requiredRole="customer">
                         <CustomerDashboard />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/customer/service-map"
+                element={
+                    <ProtectedRoute requiredRole="customer">
+                        <ServiceMap />
                     </ProtectedRoute>
                 }
             />
@@ -184,6 +201,56 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requiredRole="worker">
                         <WorkerEarnings />
+                    </ProtectedRoute>
+                }
+            />
+
+
+            {/* =========================
+                ADMIN
+            ========================= */}
+
+            <Route
+                path="/admin/dashboard"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <AdminDashboard />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/admin/users"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <Users />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/admin/jobs"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <Jobs />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/admin/worker-verification"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <WorkerVerification />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/admin/reports"
+                element={
+                    <ProtectedRoute requiredRole="admin">
+                        <Reports />
                     </ProtectedRoute>
                 }
             />

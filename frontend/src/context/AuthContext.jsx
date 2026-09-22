@@ -71,6 +71,8 @@ const normalizeUser = (
       ? "worker"
       : rawUser.role === "customer"
       ? "customer"
+      : rawUser.role === "admin"
+      ? "admin"
       : fallbackRole;
 
   return {

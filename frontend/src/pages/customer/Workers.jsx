@@ -1,6 +1,7 @@
 import {
   BriefcaseBusiness,
   CheckCircle2,
+  Heart,
   MapPin,
   RefreshCw,
   Search,
@@ -51,6 +52,8 @@ const Workers = () => {
 
   const [error, setError] =
     useState("");
+
+  const [favoriteIds, setFavoriteIds] = useState([]);
 
   const [search, setSearch] =
     useState("");
@@ -149,6 +152,22 @@ const Workers = () => {
   useEffect(() => {
     loadWorkers();
   }, [category]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/customer-features/favorites`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((response) => response.json())
+      .then((data) => setFavoriteIds((data.workers || []).map((worker) => String(worker._id))))
+      .catch(() => {});
+  }, []);
+
+  const toggleFavorite = async (workerId) => {
+    const response = await fetch(`${API_BASE_URL}/customer-features/favorites/${workerId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const data = await response.json();
+    if (response.ok) setFavoriteIds((data.workers || []).map((worker) => String(worker._id)));
+  };
 
   const categories =
     useMemo(() => {
@@ -392,6 +411,10 @@ const Workers = () => {
                             : "Professional"}
                         </span>
                       </div>
+
+                      <button type="button" className={favoriteIds.includes(String(worker._id)) ? "favorite-worker active" : "favorite-worker"} onClick={() => toggleFavorite(worker._id)} aria-label="Toggle favorite worker" title="Favorite worker">
+                        <Heart size={18} fill={favoriteIds.includes(String(worker._id)) ? "currentColor" : "none"} />
+                      </button>
                     </div>
 
                     <div className="worker-rating">

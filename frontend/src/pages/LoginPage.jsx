@@ -132,14 +132,6 @@ function LoginPage() {
             return;
         }
 
-        if (role === "admin") {
-            setError(
-                "Admin login is not available in the current backend."
-            );
-            return;
-        }
-
-
         try {
             setLoading(true);
 
@@ -174,13 +166,6 @@ function LoginPage() {
 
     const handleRegisterClick =
         () => {
-            if (role === "admin") {
-                setError(
-                    "Admin registration is not available. Please use an administrator account."
-                );
-                return;
-            }
-
             navigate(
                 `/register?role=${role}`
             );
@@ -190,14 +175,6 @@ function LoginPage() {
     const handleDemoLogin =
         async () => {
             setError("");
-
-            if (role === "admin") {
-                setError(
-                    "Admin login is not available in the current backend."
-                );
-                return;
-            }
-
             setError(
                 "Demo login is disabled because authentication is connected to the backend. Please use a registered account."
             );

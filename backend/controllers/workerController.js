@@ -2,6 +2,8 @@ const Worker = require("../models/Worker");
 const Job = require("../models/Job");
 const { getRequiredSkill } = require("../utils/skillMap");
 const { expireAndFinalizeDispatches } = require("../services/dispatchService");
+const { emitToJob } = require("../services/realtimeService");
+const { calculateEta } = require("../services/etaService");
 
 
 // ======================================================
@@ -449,6 +451,21 @@ const updateLocation = async (req, res) => {
 
         await worker.save();
 
+        const trackingJobs = await Job.find({
+            assignedWorker: worker._id,
+            liveTrackingActive: true,
+            status: "on_the_way"
+        }).select("_id location");
+
+        trackingJobs.forEach((job) => {
+            const eta = calculateEta(worker.location, job.location);
+            emitToJob(job._id, "tracking:location", {
+                jobId: job._id,
+                location: worker.location,
+                ...eta
+            });
+        });
+
         return res.status(200).json({
             success: true,
             message: "Worker location updated successfully",
@@ -648,14 +665,38 @@ const getWorkerEarnings = async (req, res) => {
 
         const totalEarnings = jobs.reduce(
             (total, job) =>
-                total + Number(job.finalPrice || 0),
+                total + Number(job.workerPayout || job.finalPrice || 0),
             0
         );
+
+        const monthly = await Job.aggregate([
+            {
+                $match: {
+                    assignedWorker: workerId,
+                    status: "completed",
+                    paymentStatus: "paid"
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m", date: { $ifNull: ["$paidAt", "$updatedAt"] } } },
+                    amount: { $sum: { $ifNull: ["$workerPayout", "$finalPrice"] } },
+                    jobs: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: -1 } },
+            { $limit: 24 }
+        ]);
 
 
         return res.status(200).json({
             success: true,
             totalEarnings,
+            earnings: {
+                total: totalEarnings,
+                monthly,
+                jobs
+            },
             count: jobs.length,
             jobs
         });
@@ -732,7 +773,7 @@ const searchWorkerJobs = async (req, res) => {
             urgency,
             minPrice,
             maxPrice,
-            status = "posted",
+            status,
             limit = 50
         } = req.query;
 
@@ -746,13 +787,17 @@ const searchWorkerJobs = async (req, res) => {
 
 
         // Status filter
-        if (
-            status &&
-            AVAILABLE_JOB_STATUSES.includes(
-                String(status).toLowerCase()
-            )
+        const requestedStatus = String(status || "").trim().toLowerCase();
+
+        if (requestedStatus === "all") {
+            query.status = {
+                $in: AVAILABLE_JOB_STATUSES
+            };
+        } else if (
+            requestedStatus &&
+            AVAILABLE_JOB_STATUSES.includes(requestedStatus)
         ) {
-            query.status = String(status).toLowerCase();
+            query.status = requestedStatus;
         }
 
 

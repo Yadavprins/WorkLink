@@ -8,6 +8,13 @@ const jobRoutes = require("./routes/jobRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const aiRoutes = require("./routes/aiRoutes");
+const verificationRoutes = require("./routes/verificationRoutes");
+const customerFeatureRoutes = require("./routes/customerFeatureRoutes");
+const safetyRoutes = require("./routes/safetyRoutes");
+const growthRoutes = require("./routes/growthRoutes");
 
 const app = express();
 
@@ -34,6 +41,13 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/verification", verificationRoutes);
+app.use("/api/customer-features", customerFeatureRoutes);
+app.use("/api/safety", safetyRoutes);
+app.use("/api/growth", growthRoutes);
 
 // Centralized 404 response
 app.use((req, res) => {

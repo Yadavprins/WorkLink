@@ -159,6 +159,14 @@ const normalizeJob = (job) => {
     location:
       locationText || "Location not specified",
 
+    locationCoordinates:
+      job.location && typeof job.location === "object"
+        ? {
+            latitude: job.location.latitude,
+            longitude: job.location.longitude,
+          }
+        : null,
+
     locationText:
       locationText || "Location not specified",
 
@@ -403,6 +411,20 @@ const jobService = {
       `/jobs/${id}`,
       {
         method: "DELETE",
+      }
+    );
+  },
+
+  async rateWorker(jobId, payload = {}) {
+    if (!jobId) {
+      throw new Error("Job ID is required.");
+    }
+
+    return request(
+      `/jobs/${jobId}/rate`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
       }
     );
   },

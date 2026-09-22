@@ -18,6 +18,7 @@ import {
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 import JobCard from "../../components/jobs/JobCard";
+import B2BAccountPanel from "../../components/customer/B2BAccountPanel";
 import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL =
@@ -400,6 +401,8 @@ const CustomerDashboard = () => {
                         </Link>
 
                     </section>
+
+                    <B2BAccountPanel />
 
 
                     {/* ERROR */}

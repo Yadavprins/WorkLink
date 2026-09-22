@@ -9,6 +9,7 @@ import {
   Phone,
   Save,
   Star,
+  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -62,9 +63,13 @@ const WorkerProfile = () => {
   const [locationUpdating, setLocationUpdating] = useState(false);
   const [availabilityUpdating, setAvailabilityUpdating] =
     useState(false);
+  const [verificationUpdating, setVerificationUpdating] = useState(false);
 
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [verificationSaving, setVerificationSaving] = useState(false);
+  const [certificateDraft, setCertificateDraft] = useState({ title: "", issuer: "", issuedYear: "", documentUrl: "" });
+  const [portfolioDraft, setPortfolioDraft] = useState({ title: "", description: "", beforeImage: "", afterImage: "" });
 
   const getToken = () => {
     return localStorage.getItem("nexserve_token");
@@ -129,6 +134,13 @@ const WorkerProfile = () => {
       completedJobs: Number(worker.completedJobs || 0),
 
       acceptedJobs: Number(worker.acceptedJobs || 0),
+
+      certificates: Array.isArray(worker.certificates) ? worker.certificates : [],
+      portfolio: Array.isArray(worker.portfolio) ? worker.portfolio : [],
+      verificationStatus: worker.verificationStatus || "not_submitted",
+      verificationNotes: worker.verificationNotes || "",
+      trustScore: Number(worker.trustScore || 0),
+      badges: Array.isArray(worker.badges) ? worker.badges : [],
 
       isAvailable: Boolean(worker.isAvailable),
 
@@ -394,11 +406,82 @@ const WorkerProfile = () => {
     );
   };
 
+  const verifyDeviceAndGps = async () => {
+    if (!hasCoordinates || verificationUpdating) return;
+    try {
+      setVerificationUpdating(true);
+      const storedDeviceId = localStorage.getItem("nexserve_device_id") ||
+        (crypto.randomUUID ? crypto.randomUUID() : `device_${Date.now()}`);
+      localStorage.setItem("nexserve_device_id", storedDeviceId);
+      await apiRequest("/safety/device-gps", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceId: storedDeviceId,
+          latitude: profile.location.latitude,
+          longitude: profile.location.longitude,
+          accuracy: null,
+        }),
+      });
+      setSaved(true);
+      await loadProfile();
+    } catch (err) {
+      setError(err?.message || "Unable to verify device and GPS.");
+    } finally {
+      setVerificationUpdating(false);
+    }
+  };
+
   const cancelEditing = () => {
     setForm(profile);
     setEditing(false);
     setError("");
     setSaved(false);
+  };
+
+  const addCertificate = () => {
+    if (!certificateDraft.title.trim() || !certificateDraft.issuer.trim()) {
+      setError("Certificate title and issuer are required.");
+      return;
+    }
+    setForm((previous) => ({
+      ...previous,
+      certificates: [...(previous.certificates || []), { ...certificateDraft }],
+    }));
+    setCertificateDraft({ title: "", issuer: "", issuedYear: "", documentUrl: "" });
+  };
+
+  const addPortfolioItem = () => {
+    if (!portfolioDraft.title.trim() || (!portfolioDraft.beforeImage.trim() && !portfolioDraft.afterImage.trim())) {
+      setError("Portfolio title and at least one image URL are required.");
+      return;
+    }
+    setForm((previous) => ({
+      ...previous,
+      portfolio: [...(previous.portfolio || []), { ...portfolioDraft }],
+    }));
+    setPortfolioDraft({ title: "", description: "", beforeImage: "", afterImage: "" });
+  };
+
+  const submitVerification = async () => {
+    try {
+      setVerificationSaving(true);
+      setError("");
+      const data = await apiRequest("/verification/submit", {
+        method: "POST",
+        body: JSON.stringify({
+          certificates: form.certificates || [],
+          portfolio: form.portfolio || [],
+        }),
+      });
+      const updated = normalizeProfile(data.worker);
+      setProfile(updated);
+      setForm(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err?.message || "Unable to submit verification.");
+    } finally {
+      setVerificationSaving(false);
+    }
   };
 
   if (loading || !profile || !form) {
@@ -779,6 +862,10 @@ const WorkerProfile = () => {
                           ? "Updating..."
                           : "Use Current Location"}
                       </button>
+                      <button type="button" className="secondary-btn" onClick={verifyDeviceAndGps} disabled={!hasCoordinates || verificationUpdating}>
+                        <ShieldCheck size={15} />
+                        {verificationUpdating ? "Verifying..." : profile.gpsVerified ? "GPS Verified" : "Verify Device & GPS"}
+                      </button>
                     </div>
 
                     <small>
@@ -887,6 +974,55 @@ const WorkerProfile = () => {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div className="profile-form-card verification-profile-card">
+                <div className="profile-card-heading">
+                  <div>
+                    <h2><ShieldCheck size={19} /> Verification & Portfolio</h2>
+                    <p>Show customers your professional proof and completed work.</p>
+                  </div>
+                  <strong className={`verification-chip ${profile.verificationStatus}`}>
+                    {profile.verificationStatus.replace("_", " ")}
+                  </strong>
+                </div>
+
+                <div className="trust-score-row">
+                  <span>Trust Score</span>
+                  <strong>{profile.trustScore}/100</strong>
+                  <div className="trust-score-bar"><span style={{ width: `${profile.trustScore}%` }} /></div>
+                </div>
+
+                <div className="profile-badges-row">
+                  {(profile.badges || []).length > 0 ? profile.badges.map((badge) => <span key={badge}>{badge}</span>) : <small>Badges appear after verification and completed jobs.</small>}
+                </div>
+
+                <div className="verification-list">
+                  <h3>Digital Certificates</h3>
+                  {(form.certificates || []).map((certificate, index) => <div className="verification-item" key={`${certificate.title}-${index}`}><strong>{certificate.title}</strong><span>{certificate.issuer} {certificate.issuedYear ? `· ${certificate.issuedYear}` : ""}</span></div>)}
+                  <div className="verification-input-grid">
+                    <input placeholder="Certificate title" value={certificateDraft.title} onChange={(event) => setCertificateDraft({ ...certificateDraft, title: event.target.value })} />
+                    <input placeholder="Issuing organization" value={certificateDraft.issuer} onChange={(event) => setCertificateDraft({ ...certificateDraft, issuer: event.target.value })} />
+                    <input placeholder="Document URL" value={certificateDraft.documentUrl} onChange={(event) => setCertificateDraft({ ...certificateDraft, documentUrl: event.target.value })} />
+                    <button type="button" className="secondary-btn" onClick={addCertificate}>Add certificate</button>
+                  </div>
+                </div>
+
+                <div className="verification-list">
+                  <h3>Before / After Portfolio</h3>
+                  {(form.portfolio || []).map((item, index) => <div className="verification-item" key={`${item.title}-${index}`}><strong>{item.title}</strong><span>{item.description || "Completed service showcase"}</span></div>)}
+                  <div className="verification-input-grid">
+                    <input placeholder="Project title" value={portfolioDraft.title} onChange={(event) => setPortfolioDraft({ ...portfolioDraft, title: event.target.value })} />
+                    <input placeholder="Short description" value={portfolioDraft.description} onChange={(event) => setPortfolioDraft({ ...portfolioDraft, description: event.target.value })} />
+                    <input placeholder="Before image URL" value={portfolioDraft.beforeImage} onChange={(event) => setPortfolioDraft({ ...portfolioDraft, beforeImage: event.target.value })} />
+                    <input placeholder="After image URL" value={portfolioDraft.afterImage} onChange={(event) => setPortfolioDraft({ ...portfolioDraft, afterImage: event.target.value })} />
+                    <button type="button" className="secondary-btn" onClick={addPortfolioItem}>Add project</button>
+                  </div>
+                </div>
+
+                <button type="button" className="primary-btn" onClick={submitVerification} disabled={verificationSaving || !(form.certificates || []).length && !(form.portfolio || []).length}>
+                  <ShieldCheck size={16} /> {verificationSaving ? "Submitting..." : "Submit for verification"}
+                </button>
               </div>
             </div>
 

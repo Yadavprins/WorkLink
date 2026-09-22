@@ -92,6 +92,64 @@ const workerSchema = new mongoose.Schema(
             min: 0
         },
 
+        certificates: {
+            type: [{
+                title: { type: String, trim: true },
+                issuer: { type: String, trim: true },
+                issuedYear: { type: Number, min: 1900, max: 2100 },
+                documentUrl: { type: String, trim: true },
+                status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" }
+            }],
+            default: []
+        },
+
+        portfolio: {
+            type: [{
+                title: { type: String, trim: true },
+                description: { type: String, trim: true },
+                beforeImage: { type: String, trim: true },
+                afterImage: { type: String, trim: true }
+            }],
+            default: []
+        },
+
+        verificationStatus: {
+            type: String,
+            enum: ["not_submitted", "pending", "approved", "rejected"],
+            default: "not_submitted"
+        },
+
+        verificationNotes: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
+        verificationSubmittedAt: {
+            type: Date,
+            default: null
+        },
+
+        verifiedAt: {
+            type: Date,
+            default: null
+        },
+
+        trustScore: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 100
+        },
+
+        badges: {
+            type: [String],
+            default: []
+        },
+
+        featuredUntil: { type: Date, default: null },
+        featuredCity: { type: String, default: "", trim: true },
+
         /*
          * Current GPS location.
          *
@@ -113,6 +171,18 @@ const workerSchema = new mongoose.Schema(
             enum: ["worker"]
         },
 
+        fcmToken: {
+            type: String,
+            default: "",
+            select: false
+        },
+
+        deviceId: { type: String, default: "", select: false },
+        deviceVerified: { type: Boolean, default: false },
+        lastDeviceCheckAt: { type: Date, default: null },
+        gpsVerified: { type: Boolean, default: false },
+        gpsAccuracy: { type: Number, default: null, min: 0 },
+
         isBlocked: {
             type: Boolean,
             default: false
@@ -128,6 +198,12 @@ const workerSchema = new mongoose.Schema(
             default: 0,
             min: 0,
             max: 5
+        },
+
+        totalRatings: {
+            type: Number,
+            default: 0,
+            min: 0
         },
 
         acceptedJobs: {

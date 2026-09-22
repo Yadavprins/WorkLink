@@ -7,6 +7,7 @@ import {
   LogOut,
   PlusCircle,
   Settings,
+  Map,
   User,
   Users,
   Wallet,
@@ -21,6 +22,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const customerMenu = [
     { label: "Dashboard", path: "/customer/dashboard", icon: Home },
+    { label: "Service Map", path: "/customer/service-map", icon: Map },
     { label: "Post a Job", path: "/customer/create-job", icon: PlusCircle },
     { label: "My Jobs", path: "/customer/my-jobs", icon: ClipboardList },
     { label: "Find Workers", path: "/workers", icon: Users },

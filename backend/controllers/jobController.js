@@ -8,7 +8,9 @@ const {
 } = require("../services/locationService");
 
 const {
-    predictJobDetails
+    predictJobDetails,
+    detectFakeJob,
+    analyzeProblemImage
 } = require("../services/aiService");
 
 const {
@@ -18,6 +20,9 @@ const {
 const generateOTP = require("../utils/generateOTP");
 const { getRequiredSkill } = require("../utils/skillMap");
 const debugLog = require("../utils/debugLog");
+const { calculateNextRating } = require("../utils/ratingUtils");
+const { releaseJobEscrow } = require("../services/paymentService");
+const { rewardReferral } = require("../services/growthService");
 
 const {
     createNotification
@@ -132,7 +137,10 @@ const createJob = async (req, res) => {
             urgency,
             bookingType,
             minBudget,
-            maxBudget
+            maxBudget,
+            scheduledAt,
+            isEmergency,
+            businessAccount
         } = req.body || {};
 
         if (
@@ -191,7 +199,7 @@ const createJob = async (req, res) => {
         }
 
         const finalUrgency =
-            urgency || "normal";
+            isEmergency ? "urgent" : urgency || "normal";
 
         if (
             !["normal", "urgent"].includes(
@@ -219,6 +227,11 @@ const createJob = async (req, res) => {
                 message:
                     "Invalid latitude or longitude"
             });
+        }
+
+        const requestedSchedule = scheduledAt ? new Date(scheduledAt) : null;
+        if (requestedSchedule && (Number.isNaN(requestedSchedule.getTime()) || requestedSchedule <= new Date())) {
+            return res.status(400).json({ success: false, message: "Scheduled time must be a valid future date" });
         }
 
         // ==================================================
@@ -253,6 +266,29 @@ const createJob = async (req, res) => {
         const finalDifficulty =
             aiPrediction?.difficulty ||
             "Medium";
+
+        let aiRisk = { riskScore: 0, signals: [] };
+        let imageAnalysis = null;
+
+        try {
+            const result = await detectFakeJob({
+                title: cleanTitle,
+                description: cleanDescription,
+                category: finalCategory
+            });
+            aiRisk = result?.result || aiRisk;
+        } catch (error) {
+            console.error("AI fake-job detection error:", error.message);
+        }
+
+        if (image) {
+            try {
+                const result = await analyzeProblemImage(String(image).trim());
+                imageAnalysis = result?.analysis || null;
+            } catch (error) {
+                console.error("AI image analysis error:", error.message);
+            }
+        }
 
         // ==================================================
         // PRICE ESTIMATION
@@ -328,6 +364,14 @@ const createJob = async (req, res) => {
                     ? String(image).trim()
                     : "",
 
+            aiRiskScore: Number(aiRisk.riskScore || 0),
+
+            aiRiskSignals: Array.isArray(aiRisk.signals)
+                ? aiRisk.signals
+                : [],
+
+            imageAnalysis,
+
             city:
                 cleanCity,
 
@@ -344,6 +388,14 @@ const createJob = async (req, res) => {
 
             urgency:
                 finalUrgency,
+
+            isEmergency: Boolean(isEmergency),
+
+            scheduledAt: requestedSchedule,
+
+            businessAccount: businessAccount && isValidObjectId(businessAccount)
+                ? businessAccount
+                : null,
 
             bookingType,
 
@@ -1989,6 +2041,12 @@ const completeJob = async (
 
         await job.save();
 
+        if (job.escrowStatus === "held") {
+            await releaseJobEscrow(job);
+        }
+
+        await rewardReferral(job.customer);
+
         await Worker.findByIdAndUpdate(
             worker._id,
             {
@@ -2167,39 +2225,18 @@ const rateWorker = async (
             });
         }
 
-        const previousCompletedJobs =
-            Math.max(
-                Number(
-                    worker.completedJobs || 0
-                ) - 1,
-                0
-            );
+        const previousRatings =
+            Number(worker.totalRatings || 0);
 
         const oldRating =
-            Number(
-                worker.rating || 0
-            );
+            Number(worker.rating || 0);
 
-        let newRating;
-
-        if (
-            previousCompletedJobs === 0
-        ) {
-            newRating =
-                numericRating;
-        } else {
-            newRating =
-                (
-                    (
-                        oldRating *
-                        previousCompletedJobs
-                    ) +
-                    numericRating
-                ) /
-                (
-                    previousCompletedJobs + 1
-                );
-        }
+        const nextRating =
+            calculateNextRating({
+                currentAverage: oldRating,
+                totalRatings: previousRatings,
+                newRating: numericRating
+            });
 
         job.rating =
             numericRating;
@@ -2217,9 +2254,9 @@ const rateWorker = async (
         await job.save();
 
         worker.rating =
-            Number(
-                newRating.toFixed(1)
-            );
+            nextRating;
+        worker.totalRatings =
+            previousRatings + 1;
 
         await worker.save();
 
@@ -2257,6 +2294,98 @@ const rateWorker = async (
             success: false,
             message:
                 "Server error while rating worker"
+        });
+    }
+};
+
+const rateCustomer = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const { rating, review } = req.body || {};
+
+        if (!isValidObjectId(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID"
+            });
+        }
+
+        const numericRating = Number(rating);
+        if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
+            return res.status(400).json({
+                success: false,
+                message: "Rating must be between 1 and 5"
+            });
+        }
+
+        const job = await Job.findOne({
+            _id: jobId,
+            assignedWorker: req.user.id
+        });
+
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found"
+            });
+        }
+
+        if (job.status !== "completed") {
+            return res.status(400).json({
+                success: false,
+                message: "You can rate the customer only after job completion"
+            });
+        }
+
+        if (job.customerRating !== null && job.customerRating !== undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "You have already rated this customer"
+            });
+        }
+
+        const customer = await mongoose.model("User").findById(job.customer);
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Customer not found"
+            });
+        }
+
+        const currentAverage = Number(customer.rating || 0);
+        const totalRatings = Number(customer.totalRatings || 0);
+
+        const nextRating = calculateNextRating({
+            currentAverage,
+            totalRatings,
+            newRating: numericRating
+        });
+
+        job.customerRating = numericRating;
+        job.customerReview = typeof review === "string" ? review.trim().slice(0, 1000) : "";
+        job.customerRatedAt = new Date();
+        await job.save();
+
+        customer.rating = nextRating;
+        customer.totalRatings = (Number(customer.totalRatings || 0) + 1);
+        await customer.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Customer rated successfully",
+            rating: numericRating,
+            review: job.customerReview,
+            customer: {
+                id: customer._id,
+                name: customer.name,
+                rating: customer.rating
+            }
+        });
+    } catch (error) {
+        console.error("Rate customer error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while rating customer"
         });
     }
 };

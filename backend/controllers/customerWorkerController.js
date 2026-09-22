@@ -46,12 +46,9 @@ const getCustomerWorkers = async (req, res) => {
 
         const workers = await Worker.find(query)
             .select(
-                "name phone city area skills experience rating completedJobs isAvailable location"
+                "name phone city area skills experience rating totalRatings completedJobs isAvailable location certificates portfolio verificationStatus verifiedAt trustScore badges featuredUntil featuredCity"
             )
-            .sort({
-                rating: -1,
-                completedJobs: -1
-            })
+            .sort({ featuredUntil: -1, rating: -1, completedJobs: -1 })
             .limit(50);
 
         return res.status(200).json({

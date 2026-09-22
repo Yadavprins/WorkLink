@@ -9,8 +9,11 @@ const {
 const {
     protect
 } = require("../middleware/authMiddleware");
+const { registerDeviceToken } = require("../controllers/deviceController");
 
 const router = express.Router();
+
+router.post("/device-token", protect, registerDeviceToken);
 
 
 // Get notifications

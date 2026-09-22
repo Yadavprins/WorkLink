@@ -56,6 +56,45 @@ const jobSchema = new mongoose.Schema(
             default: ""
         },
 
+        aiRiskScore: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 1
+        },
+
+        aiRiskSignals: {
+            type: [String],
+            default: []
+        },
+
+        imageAnalysis: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null
+        },
+
+        scheduledAt: {
+            type: Date,
+            default: null
+        },
+
+        isEmergency: {
+            type: Boolean,
+            default: false
+        },
+
+        repeatOf: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Job",
+            default: null
+        },
+
+        businessAccount: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "B2BAccount",
+            default: null
+        },
+
 
         // ==================================================
         // LOCATION
@@ -163,11 +202,25 @@ const jobSchema = new mongoose.Schema(
             min: 0
         },
 
+        grossAmount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
+        workerPayout: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
         discount: {
             type: Number,
             default: 0,
             min: 0
         },
+
+        promoCode: { type: String, default: "", trim: true },
 
         invoiceNumber: {
             type: String,
@@ -238,9 +291,23 @@ const jobSchema = new mongoose.Schema(
             type: String,
             enum: [
                 "mock",
-                "cash"
+                "cash",
+                "upi",
+                "card",
+                "wallet"
             ],
             default: "mock"
+        },
+
+        escrowStatus: {
+            type: String,
+            enum: ["none", "held", "released", "refunded"],
+            default: "none"
+        },
+
+        escrowReleasedAt: {
+            type: Date,
+            default: null
         },
 
         transactionId: {

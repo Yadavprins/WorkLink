@@ -8,15 +8,17 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
+import adminService from "../../services/adminService";
 
 const WorkerVerification = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Pending");
+  const [error, setError] = useState("");
 
   const [workers, setWorkers] = useState([
     {
@@ -76,6 +78,22 @@ const WorkerVerification = () => {
     },
   ]);
 
+  useEffect(() => {
+    adminService.fetchVerificationQueue().then(({ workers: queue }) => {
+      setWorkers((queue || []).map((worker) => ({
+        id: worker._id,
+        name: worker.name,
+        phone: worker.phone,
+        skill: worker.skills?.[0] || "Professional",
+        location: [worker.area, worker.city].filter(Boolean).join(", "),
+        experience: `${worker.experience || 0} years`,
+        status: worker.verificationStatus === "approved" ? "Approved" : worker.verificationStatus === "rejected" ? "Rejected" : "Pending",
+        documents: worker.certificates?.length ? `${worker.certificates.length} submitted` : "Missing",
+        applied: worker.verificationSubmittedAt,
+      })));
+    }).catch((loadError) => setError(loadError.message));
+  }, []);
+
   const filteredWorkers = useMemo(() => {
     return workers.filter((worker) => {
       const matchesSearch =
@@ -98,7 +116,14 @@ const WorkerVerification = () => {
     });
   }, [workers, search, filter]);
 
-  const updateWorkerStatus = (id, status) => {
+  const updateWorkerStatus = async (id, status) => {
+    try {
+      await adminService.updateVerification(id, status.toLowerCase());
+      setError("");
+    } catch (updateError) {
+      setError(updateError.message);
+      return;
+    }
     setWorkers((previous) =>
       previous.map((worker) =>
         worker.id === id
@@ -140,6 +165,8 @@ const WorkerVerification = () => {
         />
 
         <main className="dashboard-content">
+          {error && <div className="dashboard-error">{error}</div>}
+
           <section className="page-heading-row">
             <div>
               <span className="page-eyebrow">

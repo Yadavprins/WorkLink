@@ -128,6 +128,14 @@ const normalizeJob = (job) => {
       location ||
       "Location not specified",
 
+    locationCoordinates:
+      job.location && typeof job.location === "object"
+        ? {
+            latitude: job.location.latitude,
+            longitude: job.location.longitude,
+          }
+        : null,
+
     budget: {
       min,
       max,
@@ -159,7 +167,7 @@ const workerJobService = {
 
     params.set(
       "status",
-      "posted"
+      "all"
     );
 
     params.set(
@@ -351,6 +359,20 @@ const workerJobService = {
       _id: id,
       status: data?.status || "in_progress",
     };
+  },
+
+  async rateCustomer(jobId, payload = {}) {
+    if (!jobId) {
+      throw new Error("Job ID is required.");
+    }
+
+    return request(
+      `/jobs/${jobId}/rate-customer`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    );
   },
 };
 

@@ -15,9 +15,11 @@ const {
     makePayment,
     completeJob,
     rateWorker,
+    rateCustomer,
     cancelJob,
     deleteJob
 } = require("../controllers/jobController");
+const { payForJob } = require("../controllers/paymentController");
 
 const {
     getWorkerJobDetails
@@ -170,7 +172,7 @@ router.patch(
     "/:jobId/payment",
     protect,
     authorize("customer"),
-    makePayment
+    payForJob
 );
 
 
@@ -183,6 +185,13 @@ router.patch(
     protect,
     authorize("customer"),
     rateWorker
+);
+
+router.patch(
+    "/:jobId/rate-customer",
+    protect,
+    authorize("worker"),
+    rateCustomer
 );
 
 

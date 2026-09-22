@@ -1,7 +1,9 @@
 import {
   ArrowLeft,
+  AlertTriangle,
   Camera,
   CheckCircle2,
+  CalendarClock,
   IndianRupee,
   MapPin,
   Plus,
@@ -92,6 +94,9 @@ const CreateJob = () => {
     image,
     setImage,
   ] = useState(null);
+
+  const [isEmergency, setIsEmergency] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
 
   const [
     error,
@@ -653,7 +658,11 @@ const CreateJob = () => {
               coordinates.longitude
             ),
 
-          urgency: "normal",
+          urgency: isEmergency ? "urgent" : "normal",
+
+          isEmergency,
+
+          scheduledAt: scheduledAt || null,
 
           bookingType:
             "instant",
@@ -1075,6 +1084,22 @@ const CreateJob = () => {
                         />
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="form-card booking-options-card">
+                  <div className="form-card-header">
+                    <h2>Booking Options</h2>
+                    <p>Choose priority or schedule the service for later.</p>
+                  </div>
+                  <label className="booking-option-toggle">
+                    <input type="checkbox" checked={isEmergency} onChange={(event) => setIsEmergency(event.target.checked)} />
+                    <AlertTriangle size={17} />
+                    <span><strong>Emergency service</strong><small>Prioritize this request for the fastest available response.</small></span>
+                  </label>
+                  <div className="form-group">
+                    <label htmlFor="scheduledAt"><CalendarClock size={16} /> Schedule date and time</label>
+                    <input id="scheduledAt" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} />
                   </div>
                 </div>
 

@@ -24,6 +24,10 @@ import {
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 import StatusBadge from "../../components/jobs/StatusBadge";
+import CommunicationPanel from "../../components/jobs/CommunicationPanel";
+import LiveTrackingMap from "../../components/jobs/LiveTrackingMap";
+import PaymentPanel from "../../components/jobs/PaymentPanel";
+import SOSButton from "../../components/jobs/SOSButton";
 import jobService from "../../services/jobService";
 
 const JobDetails = () => {
@@ -49,6 +53,12 @@ const JobDetails = () => {
     useState(false);
 
   const [deleting, setDeleting] =
+    useState(false);
+  const [rating, setRating] =
+    useState(0);
+  const [review, setReview] =
+    useState("");
+  const [submittingRating, setSubmittingRating] =
     useState(false);
 
   // ===================================================
@@ -181,6 +191,34 @@ const JobDetails = () => {
       );
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRateWorker = async () => {
+    if (!job || submittingRating || rating < 1) {
+      return;
+    }
+
+    try {
+      setSubmittingRating(true);
+      setError("");
+
+      const result = await jobService.rateWorker(job.id, {
+        rating,
+        review: review.trim(),
+      });
+
+      setJob((current) => ({
+        ...current,
+        rating: result?.rating ?? rating,
+        review: result?.review ?? review.trim(),
+      }));
+      setRating(0);
+      setReview("");
+    } catch (err) {
+      setError(err?.message || "Unable to submit rating.");
+    } finally {
+      setSubmittingRating(false);
     }
   };
 
@@ -344,6 +382,36 @@ const JobDetails = () => {
         />
 
         <main className="dashboard-content">
+          {job?.assignedWorker && (
+            <CommunicationPanel
+              jobId={job.id}
+              trackingActive={job.liveTrackingActive}
+              onTrackingUpdate={(update) => setJob((current) => ({
+                ...current,
+                workerLiveLocation: update.location,
+                trackingEta: update.etaMinutes,
+              }))}
+            />
+          )}
+          {job?.liveTrackingActive && (
+            <LiveTrackingMap
+              destination={job.locationCoordinates}
+              workerLocation={job.workerLiveLocation}
+              etaMinutes={job.trackingEta}
+            />
+          )}
+          {job?.status === "in_progress" &&
+            Number(job?.finalPrice) > 0 &&
+            job?.paymentStatus !== "paid" && (
+            <PaymentPanel
+              job={job}
+              onPaid={(updatedJob) => setJob((current) => ({
+                ...current,
+                ...updatedJob,
+              }))}
+            />
+          )}
+          {["accepted", "on_the_way", "arrived", "in_progress"].includes(job?.status) && <SOSButton jobId={job.id} />}
           <button
             type="button"
             className="back-btn"
@@ -616,6 +684,45 @@ const JobDetails = () => {
               </div>
 
               {/* ACTIONS */}
+
+              {job?.status === "completed" && (
+                <div className="details-card">
+                  <div className="details-card-header">
+                    <h2>Rate Worker</h2>
+                  </div>
+
+                  <div className="rating-selector" style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={value <= rating ? "primary-btn" : "secondary-btn"}
+                        style={{ minWidth: "42px", padding: "8px 10px" }}
+                        onClick={() => setRating(value)}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={review}
+                    onChange={(event) => setReview(event.target.value)}
+                    rows={4}
+                    placeholder="Share your feedback about the worker"
+                    style={{ width: "100%", resize: "vertical", marginBottom: "12px" }}
+                  />
+
+                  <button
+                    type="button"
+                    className="primary-btn full-width"
+                    onClick={handleRateWorker}
+                    disabled={submittingRating || rating < 1}
+                  >
+                    {submittingRating ? "Submitting..." : "Submit Rating"}
+                  </button>
+                </div>
+              )}
 
               {canCancel && (
                 <>
