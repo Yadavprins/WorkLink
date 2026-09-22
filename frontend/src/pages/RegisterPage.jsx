@@ -11,15 +11,47 @@ import {
 } from "lucide-react";
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+    useLocation,
+    useNavigate,
+} from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 
+const LOCATION_API_URL = "https://nominatim.openstreetmap.org/search";
+
+const buildSuggestionLabel = (item) => {
+    if (!item?.display_name) {
+        return "";
+    }
+
+    return item.display_name
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ");
+};
+
 function RegisterPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { register } = useAuth();
 
-    const [role, setRole] = useState("customer");
+    const params = new URLSearchParams(
+        location.search
+    );
+
+    const initialRole =
+        params.get("role") || "customer";
+
+    const [role, setRole] = useState(
+        ["customer", "worker"].includes(
+            initialRole
+        )
+            ? initialRole
+            : "customer"
+    );
 
     const [form, setForm] = useState({
         name: "",
@@ -32,6 +64,8 @@ function RegisterPage() {
         experience: "",
     });
 
+    const [citySuggestions, setCitySuggestions] = useState([]);
+    const [areaSuggestions, setAreaSuggestions] = useState([]);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [locating, setLocating] = useState(false);
@@ -45,9 +79,81 @@ function RegisterPage() {
         worker: "Worker",
     };
 
-    const handleRoleChange = (selectedRole) => {
-        setRole(selectedRole);
+    const handleRoleChange = (
+        selectedRole
+    ) => {
+        const nextRole =
+            ["customer", "worker"].includes(
+                selectedRole
+            )
+                ? selectedRole
+                : "customer";
+
+        setRole(nextRole);
         setError("");
+        navigate(
+            `/register?role=${nextRole}`,
+            {
+                replace: true,
+            }
+        );
+    };
+
+    const fetchSuggestions = async (field, value) => {
+        const trimmed = String(value || "").trim();
+
+        if (trimmed.length < 2) {
+            if (field === "city") {
+                setCitySuggestions([]);
+            } else {
+                setAreaSuggestions([]);
+            }
+            return;
+        }
+
+        try {
+            const searchQuery =
+                field === "city"
+                    ? `city=${encodeURIComponent(trimmed)}`
+                    : `q=${encodeURIComponent(
+                          `${trimmed} ${form.city.trim()}`
+                      )}`;
+
+            const response = await fetch(
+                `${LOCATION_API_URL}?format=jsonv2&limit=5&countrycodes=in&${searchQuery}`,
+                {
+                    headers: {
+                        Accept: "application/json",
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+            const suggestions = Array.isArray(data)
+                ? data
+                      .map((item) => ({
+                          label: buildSuggestionLabel(item),
+                          value: item?.address?.city || item?.address?.town || item?.address?.village || item?.name || item?.display_name,
+                      }))
+                      .filter((item) => item.label)
+                : [];
+
+            if (field === "city") {
+                setCitySuggestions(suggestions);
+            } else {
+                setAreaSuggestions(suggestions);
+            }
+        } catch {
+            if (field === "city") {
+                setCitySuggestions([]);
+            } else {
+                setAreaSuggestions([]);
+            }
+        }
     };
 
     const handleChange = (event) => {
@@ -57,6 +163,14 @@ function RegisterPage() {
             ...previous,
             [name]: value,
         }));
+
+        if (name === "city") {
+            fetchSuggestions("city", value);
+        }
+
+        if (name === "area") {
+            fetchSuggestions("area", value);
+        }
 
         if (error) {
             setError("");
@@ -222,17 +336,31 @@ function RegisterPage() {
 
     return (
         <main className="auth-page">
-            <div className="login-wrapper">
+            <div className="login-wrapper auth-register-layout">
+                <aside className="auth-hero">
+                    <div className="brand-logo large">
+                        N
+                    </div>
 
-                <button
-                    className="back-button"
-                    type="button"
-                    onClick={() => navigate("/")}
-                    disabled={loading}
-                >
-                    <ArrowLeft size={17} />
-                    Back
-                </button>
+                    <h2>
+                        Welcome to
+                        <span>NexServe</span>
+                    </h2>
+
+                    <p>
+                        Create your account and get connected
+                        with trusted local service experts.
+                    </p>
+
+                    <div className="hero-badge">
+                        NexServe
+                    </div>
+
+                    <div className="hero-footer">
+                        <span>Create Here</span>
+                        <span>Design Here</span>
+                    </div>
+                </aside>
 
                 <section className="login-card">
 
@@ -406,6 +534,27 @@ function RegisterPage() {
                                     disabled={loading}
                                 />
                             </div>
+
+                            {citySuggestions.length > 0 && (
+                                <div className="location-suggestions">
+                                    {citySuggestions.map((item, index) => (
+                                        <button
+                                            key={`${item.label}-${index}`}
+                                            type="button"
+                                            className="suggestion-item"
+                                            onClick={() => {
+                                                setForm((previous) => ({
+                                                    ...previous,
+                                                    city: item.value,
+                                                }));
+                                                setCitySuggestions([]);
+                                            }}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </label>
 
 
@@ -427,6 +576,27 @@ function RegisterPage() {
                                     disabled={loading}
                                 />
                             </div>
+
+                            {areaSuggestions.length > 0 && (
+                                <div className="location-suggestions">
+                                    {areaSuggestions.map((item, index) => (
+                                        <button
+                                            key={`${item.label}-${index}`}
+                                            type="button"
+                                            className="suggestion-item"
+                                            onClick={() => {
+                                                setForm((previous) => ({
+                                                    ...previous,
+                                                    area: item.value,
+                                                }));
+                                                setAreaSuggestions([]);
+                                            }}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </label>
 
                         <button

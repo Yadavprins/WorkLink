@@ -186,25 +186,30 @@ function LoginPage() {
     return (
         <main className="auth-page">
 
-            <div className="login-wrapper">
+            <div className="login-wrapper auth-login-layout">
+                <aside className="auth-hero">
+                    <div className="brand-logo large">
+                        N
+                    </div>
 
-                {/* BACK */}
+                    <h2>
+                        Welcome to
+                        <span>NexServe</span>
+                    </h2>
 
-                <button
-                    className="back-button"
-                    type="button"
-                    onClick={() =>
-                        navigate("/")
-                    }
-                    disabled={loading}
-                >
-                    <ArrowLeft
-                        size={17}
-                    />
+                    <p>
+                        Sign in to continue and manage your local services faster.
+                    </p>
 
-                    Back
-                </button>
+                    <div className="hero-badge">
+                        NexServe
+                    </div>
 
+                    <div className="hero-footer">
+                        <span>Create Here</span>
+                        <span>Design Here</span>
+                    </div>
+                </aside>
 
                 <section className="login-card">
 
